@@ -10,7 +10,34 @@ Upload a WSDL 1.1 `document/literal` file. The generator parses it and returns a
 - a generated MCP server (one tool per SOAP operation),
 - REST Assured contract tests and jqwik JSON<->XML round-trip tests.
 
-> Status: scaffolding. See `.kiro/steering/` for scope and architecture.
+> Status: generator, generated proxy, generated MCP server and web API work end to end.
+> UI and deployment are in progress. See `.kiro/steering/` for scope and architecture.
+
+## Run the generator
+
+```
+mvn -pl web -am package -DskipTests
+java -jar web/target/soap-necromancer.jar
+```
+
+It listens on `PORT` (default 8080) and also serves the bundled legacy bank SOAP service at
+`/mock-bank/ws`.
+
+```
+curl -o bank.wsdl http://localhost:8080/api/sample-wsdl
+curl -F wsdl=@bank.wsdl http://localhost:8080/api/generate -o resurrected.zip
+```
+
+`POST /api/generate` accepts a multipart field `wsdl` or a raw `text/xml` body and returns the zip
+directly. Nothing is stored. Errors are `application/problem+json`: 400 for an empty upload,
+413 for an upload over 2 MB (`MAX_UPLOAD_BYTES`), 415 for a wrong content type, and 422 for a
+document that is not a usable WSDL 1.1 (the warnings explain why). Imported schemas and WSDLs
+are never fetched; they become `EXTERNAL_IMPORT` warnings.
+
+## Pointing at a real SOAP endpoint
+
+Generate from the real WSDL, then start the generated proxy with `SOAP_ENDPOINT` set to the
+service URL. The generated MCP server only needs `PROXY_URL`.
 
 ## Modules
 

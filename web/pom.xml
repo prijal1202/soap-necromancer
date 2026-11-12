@@ -10,4 +10,54 @@
   </parent>
   <artifactId>web</artifactId>
   <name>web (generator API, static UI, hosts mock-bank in the same JVM)</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>dev.soapnecromancer</groupId>
+      <artifactId>generators</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <!-- The legacy SOAP backend for the live demo, served at /mock-bank/ws by this same JVM. -->
+      <groupId>dev.soapnecromancer</groupId>
+      <artifactId>mock-bank</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- SsrfCanary: the same SSRF payload the parser tests use, now sent through the public upload. -->
+      <groupId>dev.soapnecromancer</groupId>
+      <artifactId>core</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>soap-necromancer</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+        <configuration>
+          <mainClass>dev.soapnecromancer.web.NecromancerApplication</mainClass>
+        </configuration>
+        <executions>
+          <execution>
+            <goals><goal>repackage</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

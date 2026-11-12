@@ -47,9 +47,27 @@ One decision per topic. Spike code lives in `spikes/` and is not part of the Mav
   run with `--memory 512m --memory-swap 512m -e PORT=10000`. It bound `0.0.0.0:10000` and answered
   `{"port":10000,"maxHeapMb":348,...}`: the JVM sees the container limit, and 70% gives ~348 MB heap,
   leaving ~160 MB for metaspace, threads and code cache.
-- Not yet measured: Spring Boot (web + generator + mock-bank) resident memory and cold-start time
-  under the limit. Check in Task 10 as soon as `web` boots, with `--cpus` limited too, since Render's
-  free tier is CPU-limited (exact CPU share not verified here).
+- Measured in Task 10 (`spikes/render-web/Measure.java`): the packaged web app (generator API +
+  mock-bank, one JVM) with the JVM sized for a 512 MB, single-CPU container
+  (`-XX:MaxRAM=512m -XX:MaxRAMPercentage=70 -XX:+UseSerialGC -Xss512k -XX:ActiveProcessorCount=1`):
+
+  | Metric                                 | Result                                  |
+  | -------------------------------------- | --------------------------------------- |
+  | Healthy after process start            | 3.2 s (Spring reports started in 2.4 s) |
+  | RSS after start / after 28 generations | 133 MB / 146 MB                         |
+  | First bank generation / warm           | 370 ms / 13-46 ms, 46 KB zip, 42 files  |
+  | 8 concurrent uploads                   | all 200                                 |
+
+  Verdict: about 30% of the 512 MB budget, so no memory tuning is needed. Not covered: CPU throttling.
+  This ran on the host JVM, not in a container, because the Docker CLI hung during the check. The real
+  `--memory 512m --cpus` container run moves to Task 12; expect a slower cold start there.
+
+- Design change from the measurement: the generation cap (`necromancer.max-concurrent=4`) first
+  rejected a burst immediately (4 of 8 got 503) although a generation takes ~20 ms. It now waits up
+  to 5 s for a slot and returns 503 only after that. Test: `burstOfConcurrentUploadsAllSucceed`.
+- Measurement pitfall, now guarded: the first run reported healthy after 294 ms because a leftover
+  app instance from an aborted run was still on the port and answered for it. The harness now
+  refuses to start if the port is busy and prints the measured app's own "Started" log line.
 - Implications already in the design: stateless `POST /api/generate` returning the zip, in-memory
   zip building, upload size limit, no disk writes.
 
