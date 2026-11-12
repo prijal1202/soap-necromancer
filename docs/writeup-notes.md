@@ -24,3 +24,22 @@ Facts collected during the build, with the evidence for each. Keep claims matche
 Bank amounts such as `0.10` and `1234567890.123456789` are a property: 31 significant digits,
 scale up to 20, same digits and same scale after JSON -> XML -> JSON. The generators spec
 (Requirement 6) carries this through the generated proxy's and the generated MCP server's JSON layers.
+
+## More things the tests caught (Task 7)
+
+3. **Code injection through WSDL documentation (guarded, then proven).** WSDL text lands in Java
+   comments of the generated proxy. javac processes unicode escapes even inside comments, so a
+   backslash-u escape for a newline or for the comment terminator in a WSDL could inject code.
+   `Escapes.javaComment` neutralizes the backslash. Two proofs: writing such an escape literally
+   in the Javadoc of `Escapes.java` itself broke the generator's own compilation ("unclosed string
+   literal"); and with the backslash escaping removed, `hostileNamesAndDocumentationStillCompile`
+   failed because the generated controller no longer compiled.
+
+4. **Jackson's JsonNode silently changes decimals.** `GeneratedProjectIT` read `"balance":2500.00`
+   from the generated proxy and got `2.5E+3`: the default `JsonNodeFactory` strips trailing zeros.
+   The generated proxy was correct (raw wire text `2500.00`); the test's parser was not. The fix
+   (`withExactBigDecimals(true)`) is now a requirement for the generated MCP server (generators
+   Requirement 6.2), which is where a JsonNode would otherwise have corrupted bank amounts.
+
+5. **End-to-end exactness.** `GeneratedProjectIT` transfers `1234567890.123456789` through
+   JSON -> generated proxy -> SOAP -> mock-bank and asserts the ledger holds exactly that value.

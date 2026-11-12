@@ -1,0 +1,21 @@
+package {{package}};
+
+import dev.soapnecromancer.runtime.SoapClient;
+import dev.soapnecromancer.runtime.model.ServiceModel;
+import org.springframework.stereotype.Service;
+
+/** Shared by every operation controller: looks up the operation in the model and calls SOAP. */
+@Service
+public class SoapInvoker {
+    private final ServiceModel model;
+    private final SoapClient client;
+
+    public SoapInvoker(ServiceModel model, SoapClient client) {
+        this.model = model;
+        this.client = client;
+    }
+
+    public Object invoke(String operation, Object body) {
+        return client.call(model.operation(operation), body);
+    }
+}

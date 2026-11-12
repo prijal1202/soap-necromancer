@@ -1,0 +1,13 @@
+package {{package}};
+
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.DefaultValue;
+
+import java.time.Duration;
+
+/** SOAP endpoint settings. Set SOAP_ENDPOINT, SOAP_CONNECT_TIMEOUT and SOAP_READ_TIMEOUT to override. */
+@ConfigurationProperties("soap")
+public record SoapProperties(String endpoint,
+                             @DefaultValue("5s") Duration connectTimeout,
+                             @DefaultValue("30s") Duration readTimeout) {
+}

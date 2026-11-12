@@ -1,0 +1,24 @@
+package {{package}};
+
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * POST {{pathDoc}}: SOAP operation {{nameDoc}}.
+ * {{docDoc}}
+ */
+@RestController
+class {{className}} {
+    private final SoapInvoker invoker;
+
+    {{className}}(SoapInvoker invoker) {
+        this.invoker = invoker;
+    }
+
+    @PostMapping(path = {{pathJava}}, consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    Object invoke(@RequestBody(required = false) Object body) {
+        return invoker.invoke({{nameJava}}, body);
+    }
+}

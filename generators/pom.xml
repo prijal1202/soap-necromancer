@@ -10,4 +10,133 @@
   </parent>
   <artifactId>generators</artifactId>
   <name>generators (OpenAPI, generated proxy, generated tests, generated MCP server)</name>
+
+  <dependencies>
+    <dependency>
+      <groupId>dev.soapnecromancer</groupId>
+      <artifactId>core</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.samskivert</groupId>
+      <artifactId>jmustache</artifactId>
+      <version>${jmustache.version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.jqwik</groupId>
+      <artifactId>jqwik</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Validates generated openapi.yaml. Test scope only (docs/decisions.md section 4). -->
+      <groupId>io.swagger.parser.v3</groupId>
+      <artifactId>swagger-parser</artifactId>
+      <version>${swagger-parser.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Independent YAML reader for the emitter round-trip property. -->
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- GeneratedProjectIT starts mock-bank in-process as the SOAP backend. -->
+      <groupId>dev.soapnecromancer</groupId>
+      <artifactId>mock-bank</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <!-- Templates contain ${PORT}-style placeholders for the generated project: never filtered. -->
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+      </resource>
+      <resource>
+        <directory>src/main/resources-filtered</directory>
+        <filtering>true</filtering>
+      </resource>
+    </resources>
+    <testResources>
+      <testResource>
+        <directory>src/test/resources</directory>
+      </testResource>
+      <testResource>
+        <directory>${project.basedir}/../mock-bank/src/main/resources</directory>
+        <includes><include>bank.wsdl</include></includes>
+      </testResource>
+    </testResources>
+
+    <plugins>
+      <plugin>
+        <!--
+          Copies runtime sources (converter, SOAP client, model records) and three jqwik test helpers
+          into the generator jar under runtime-src/, plus an index. ProxyGenerator copies them into
+          every generated proxy from the classpath, so the generator never reads the source tree at
+          run time (there is none on Render). Generators design, "Runtime sources travel as classpath resources".
+        -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.1.0</version>
+        <executions>
+          <execution>
+            <id>runtime-src</id>
+            <phase>generate-resources</phase>
+            <goals><goal>run</goal></goals>
+            <configuration>
+              <target>
+                <property name="rs.dir" value="${project.build.outputDirectory}/runtime-src"/>
+                <delete dir="${rs.dir}" quiet="true"/>
+                <copy todir="${rs.dir}/main">
+                  <fileset dir="${project.basedir}/../runtime/src/main/java" includes="**/*.java"/>
+                </copy>
+                <copy todir="${rs.dir}/test">
+                  <fileset dir="${project.basedir}/../runtime/src/test/java"
+                           includes="**/ModelArbitraries.java **/XmlRenderer.java **/RoundTripAssertions.java"/>
+                </copy>
+                <pathconvert property="rs.list" pathsep="&#10;" dirsep="/">
+                  <sort>
+                    <fileset dir="${rs.dir}" includes="**/*.java"/>
+                  </sort>
+                  <mapper>
+                    <regexpmapper from="^.*[/\\]runtime-src[/\\](.*)$$" to="\1" handledirsep="true"/>
+                  </mapper>
+                </pathconvert>
+                <echo file="${rs.dir}/index.txt" message="${rs.list}&#10;"/>
+              </target>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <!-- GeneratedProjectIT: verify phase only. The Kiro hook runs "test", so it never runs this. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.5.3</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

@@ -1,0 +1,56 @@
+package {{package}};
+
+import dev.soapnecromancer.runtime.ConversionException;
+import dev.soapnecromancer.runtime.SoapFaultException;
+import dev.soapnecromancer.runtime.SoapTransportException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+/**
+ * Maps failures to RFC 7807 Problem responses (generators spec, Requirement 2.6). Messages come
+ * from the runtime, never from the backend's raw error body (Requirement 2.7).
+ */
+@RestControllerAdvice
+class ProblemHandler {
+    private static final Logger log = LoggerFactory.getLogger(ProblemHandler.class);
+
+    @ExceptionHandler(ConversionException.class)
+    ProblemDetail invalidRequest(ConversionException e) {
+        ProblemDetail p = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+        p.setTitle("Invalid request");
+        p.setProperty("path", e.path());
+        return p;
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    ProblemDetail unreadable(HttpMessageNotReadableException e) {
+        ProblemDetail p = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Request body is not valid JSON");
+        p.setTitle("Invalid request");
+        p.setProperty("path", "$");
+        return p;
+    }
+
+    @ExceptionHandler(SoapFaultException.class)
+    ProblemDetail fault(SoapFaultException e) {
+        HttpStatus status = e.isClientFault() ? HttpStatus.BAD_REQUEST : HttpStatus.BAD_GATEWAY;
+        ProblemDetail p = ProblemDetail.forStatusAndDetail(status, e.faultString());
+        p.setTitle("SOAP fault");
+        p.setProperty("faultcode", e.faultCode());
+        p.setProperty("faultstring", e.faultString());
+        return p;
+    }
+
+    @ExceptionHandler(SoapTransportException.class)
+    ProblemDetail transport(SoapTransportException e) {
+        log.warn("SOAP call failed: {} {}", e.kind(), e.getMessage());
+        HttpStatus status = e.kind() == SoapTransportException.Kind.TIMEOUT ? HttpStatus.GATEWAY_TIMEOUT : HttpStatus.BAD_GATEWAY;
+        ProblemDetail p = ProblemDetail.forStatusAndDetail(status, e.getMessage());
+        p.setTitle(e.kind() == SoapTransportException.Kind.TIMEOUT ? "SOAP endpoint timed out" : "SOAP endpoint error");
+        return p;
+    }
+}

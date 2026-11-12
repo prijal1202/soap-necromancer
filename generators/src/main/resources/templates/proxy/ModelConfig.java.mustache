@@ -1,0 +1,44 @@
+package {{package}};
+
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import dev.soapnecromancer.runtime.JsonXmlConverter;
+import dev.soapnecromancer.runtime.SoapClient;
+import dev.soapnecromancer.runtime.model.ServiceModel;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+
+/**
+ * Loads model.json (the canonical model the generator produced) into the runtime model records,
+ * and wires the converter and SOAP client from them.
+ */
+@Configuration
+class ModelConfig {
+
+    @Bean
+    ServiceModel serviceModel() throws IOException {
+        ObjectMapper mapper = JsonMapper.builder().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).build();
+        try (InputStream in = new ClassPathResource("model.json").getInputStream()) {
+            return mapper.readValue(in, ServiceModel.class);
+        }
+    }
+
+    @Bean
+    JsonXmlConverter jsonXmlConverter(ServiceModel model) {
+        return new JsonXmlConverter(model);
+    }
+
+    @Bean
+    SoapClient soapClient(JsonXmlConverter converter, SoapProperties soap) {
+        if (soap.endpoint() == null || soap.endpoint().isBlank()) {
+            throw new IllegalStateException("No SOAP endpoint: the WSDL has no soap:address. Set SOAP_ENDPOINT.");
+        }
+        return new SoapClient(converter, URI.create(soap.endpoint()), soap.connectTimeout(), soap.readTimeout());
+    }
+}

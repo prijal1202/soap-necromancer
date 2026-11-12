@@ -28,7 +28,7 @@ I can browse it in Swagger UI and generate clients.
 1. The generator SHALL emit `openapi.yaml` as OpenAPI 3.0.3, built directly from the canonical model (no swagger-models at runtime).
 2. The generator SHALL emit one `POST /{OperationName}` path per operation, with `operationId` = operation name and `summary` = the WSDL documentation (when present).
 3. Each path SHALL have a required `application/json` request body referencing the input type, a `200` response referencing the output type, and `400`, `502` and `504` responses referencing a shared `Problem` schema.
-4. Complex types SHALL map to `components/schemas` objects with properties in model order, `required` for fields with minOccurs >= 1, and `additionalProperties: false`.
+4. Complex types SHALL map to `components/schemas` objects with properties in model order, `required` for fields with minOccurs >= 1, and `additionalProperties: false`. Enum types SHALL also be named components, so clients can generate enum classes. Built-ins and non-enum simple types SHALL be inlined.
 5. Repeated fields SHALL map to arrays with `minItems`, and `maxItems` when bounded.
 6. Built-ins SHALL map inline: string -> `string`; int -> `integer/int32`; long -> `integer/int64`; decimal -> `number` with `format: decimal`; boolean -> `boolean`; date -> `string/date`; dateTime -> `string/date-time`. Enums SHALL map to `string` with `enum` values in order.
 7. Component names SHALL be the type ids with characters outside `[A-Za-z0-9._-]` replaced, and SHALL be unique.
@@ -97,7 +97,7 @@ with every digit, so that money is never rounded by a JSON layer.
 #### Acceptance Criteria
 
 1. The generated proxy SHALL configure Jackson with `USE_BIG_DECIMAL_FOR_FLOATS` and `WRITE_BIGDECIMAL_AS_PLAIN`, so decimals never pass through `double`.
-2. The generated MCP server SHALL parse tool arguments so that decimals are `BigDecimal`, and SHALL forward them to the generated proxy without exponent notation.
+2. The generated MCP server SHALL parse tool arguments so that decimals are `BigDecimal`, and SHALL forward them to the generated proxy without exponent notation. Any Jackson `JsonNode` tree in that path SHALL use `JsonNodeFactory.withExactBigDecimals(true)`, because the default factory strips trailing zeros (`2500.00` becomes `2.5E+3`; found by `GeneratedProjectIT`).
 3. Generated contract tests SHALL send `0.10` and `1234567890.123456789` to a decimal field (when the model has one) and assert that the stub received exactly that text.
 4. WHEN the MCP SDK cannot be configured to produce `BigDecimal` THEN decimal fields in the MCP `inputSchema` SHALL be `type: string` with a decimal pattern instead of `type: number` (decided in Task 9, recorded in `docs/decisions.md`).
 

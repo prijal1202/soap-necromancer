@@ -1,0 +1,15 @@
+package {{package}};
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
+
+/** Liveness of the generated proxy itself; does not call the SOAP endpoint. */
+@RestController
+class HealthController {
+    @GetMapping("/health")
+    Map<String, String> health() {
+        return Map.of("status", "UP");
+    }
+}

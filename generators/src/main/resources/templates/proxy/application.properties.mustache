@@ -1,0 +1,10 @@
+# Generated proxy configuration. Every value can be overridden with the environment variable shown.
+server.port=${PORT:8080}
+soap.endpoint=${SOAP_ENDPOINT:{{endpointProperty}}}
+soap.connect-timeout=${SOAP_CONNECT_TIMEOUT:5s}
+soap.read-timeout=${SOAP_READ_TIMEOUT:30s}
+
+# Decimals never pass through double (generators spec, Requirement 6.1).
+spring.jackson.deserialization.use-big-decimal-for-floats=true
+spring.jackson.deserialization.fail-on-trailing-tokens=true
+spring.jackson.generator.write-bigdecimal-as-plain=true
