@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+                  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+                  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                  xmlns:tns="urn:spike:hello"
+                  targetNamespace="urn:spike:hello">
+  <wsdl:types>
+    <xs:schema targetNamespace="urn:spike:hello" elementFormDefault="qualified">
+      <xs:element name="HelloRequest">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="name" type="xs:string"/>
+            <xs:element name="times" type="xs:int" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="HelloResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="greeting" type="xs:string" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>
+  </wsdl:types>
+  <wsdl:message name="HelloRequest"><wsdl:part name="body" element="tns:HelloRequest"/></wsdl:message>
+  <wsdl:message name="HelloResponse"><wsdl:part name="body" element="tns:HelloResponse"/></wsdl:message>
+  <wsdl:portType name="HelloPort">
+    <wsdl:operation name="Hello">
+      <wsdl:input message="tns:HelloRequest"/>
+      <wsdl:output message="tns:HelloResponse"/>
+    </wsdl:operation>
+  </wsdl:portType>
+  <wsdl:binding name="HelloBinding" type="tns:HelloPort">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="Hello">
+      <soap:operation soapAction="urn:spike:hello:Hello"/>
+      <wsdl:input><soap:body use="literal"/></wsdl:input>
+      <wsdl:output><soap:body use="literal"/></wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+  <wsdl:service name="HelloService">
+    <wsdl:port name="HelloPort" binding="tns:HelloBinding">
+      <soap:address location="http://localhost:8080/hello"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

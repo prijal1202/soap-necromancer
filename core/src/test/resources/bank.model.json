@@ -1,0 +1,280 @@
+{
+  "name" : "LegacyBankService",
+  "targetNamespace" : "urn:example:bank:v1",
+  "endpointUrl" : "http://localhost:8080/mock-bank/ws",
+  "operations" : [ {
+    "name" : "GetBalance",
+    "soapAction" : "urn:example:bank:v1:GetBalance",
+    "documentation" : "Returns the current balance of an account.",
+    "input" : {
+      "namespace" : "urn:example:bank:v1",
+      "localName" : "GetBalanceRequest",
+      "typeId" : "GetBalanceRequest"
+    },
+    "output" : {
+      "namespace" : "urn:example:bank:v1",
+      "localName" : "GetBalanceResponse",
+      "typeId" : "GetBalanceResponse"
+    }
+  }, {
+    "name" : "Transfer",
+    "soapAction" : "urn:example:bank:v1:Transfer",
+    "documentation" : "Moves funds between two accounts.",
+    "input" : {
+      "namespace" : "urn:example:bank:v1",
+      "localName" : "TransferRequest",
+      "typeId" : "TransferRequest"
+    },
+    "output" : {
+      "namespace" : "urn:example:bank:v1",
+      "localName" : "TransferResponse",
+      "typeId" : "TransferResponse"
+    }
+  }, {
+    "name" : "GetStatement",
+    "soapAction" : "urn:example:bank:v1:GetStatement",
+    "documentation" : "Lists recent transactions for an account, newest first.",
+    "input" : {
+      "namespace" : "urn:example:bank:v1",
+      "localName" : "GetStatementRequest",
+      "typeId" : "GetStatementRequest"
+    },
+    "output" : {
+      "namespace" : "urn:example:bank:v1",
+      "localName" : "GetStatementResponse",
+      "typeId" : "GetStatementResponse"
+    }
+  } ],
+  "types" : {
+    "GetBalanceRequest" : {
+      "id" : "GetBalanceRequest",
+      "kind" : "COMPLEX",
+      "base" : null,
+      "enumValues" : [ ],
+      "fields" : [ {
+        "name" : "accountId",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      } ]
+    },
+    "xs:string" : {
+      "id" : "xs:string",
+      "kind" : "SIMPLE",
+      "base" : "STRING",
+      "enumValues" : [ ],
+      "fields" : [ ]
+    },
+    "GetBalanceResponse" : {
+      "id" : "GetBalanceResponse",
+      "kind" : "COMPLEX",
+      "base" : null,
+      "enumValues" : [ ],
+      "fields" : [ {
+        "name" : "accountId",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "balance",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:decimal",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "currency",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "overdraftAllowed",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:boolean",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "asOf",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:dateTime",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      } ]
+    },
+    "xs:decimal" : {
+      "id" : "xs:decimal",
+      "kind" : "SIMPLE",
+      "base" : "DECIMAL",
+      "enumValues" : [ ],
+      "fields" : [ ]
+    },
+    "xs:boolean" : {
+      "id" : "xs:boolean",
+      "kind" : "SIMPLE",
+      "base" : "BOOLEAN",
+      "enumValues" : [ ],
+      "fields" : [ ]
+    },
+    "xs:dateTime" : {
+      "id" : "xs:dateTime",
+      "kind" : "SIMPLE",
+      "base" : "DATE_TIME",
+      "enumValues" : [ ],
+      "fields" : [ ]
+    },
+    "TransferRequest" : {
+      "id" : "TransferRequest",
+      "kind" : "COMPLEX",
+      "base" : null,
+      "enumValues" : [ ],
+      "fields" : [ {
+        "name" : "fromAccountId",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "toAccountId",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "amount",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:decimal",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "memo",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 0,
+        "maxOccurs" : 1
+      } ]
+    },
+    "TransferResponse" : {
+      "id" : "TransferResponse",
+      "kind" : "COMPLEX",
+      "base" : null,
+      "enumValues" : [ ],
+      "fields" : [ {
+        "name" : "transactionId",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "newBalance",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:decimal",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "executedAt",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:dateTime",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      } ]
+    },
+    "GetStatementRequest" : {
+      "id" : "GetStatementRequest",
+      "kind" : "COMPLEX",
+      "base" : null,
+      "enumValues" : [ ],
+      "fields" : [ {
+        "name" : "accountId",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "maxLines",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:int",
+        "minOccurs" : 0,
+        "maxOccurs" : 1
+      } ]
+    },
+    "xs:int" : {
+      "id" : "xs:int",
+      "kind" : "SIMPLE",
+      "base" : "INT",
+      "enumValues" : [ ],
+      "fields" : [ ]
+    },
+    "GetStatementResponse" : {
+      "id" : "GetStatementResponse",
+      "kind" : "COMPLEX",
+      "base" : null,
+      "enumValues" : [ ],
+      "fields" : [ {
+        "name" : "accountId",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "line",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "StatementLine",
+        "minOccurs" : 0,
+        "maxOccurs" : -1
+      } ]
+    },
+    "StatementLine" : {
+      "id" : "StatementLine",
+      "kind" : "COMPLEX",
+      "base" : null,
+      "enumValues" : [ ],
+      "fields" : [ {
+        "name" : "transactionId",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "date",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:date",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "type",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "TransactionType",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "amount",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:decimal",
+        "minOccurs" : 1,
+        "maxOccurs" : 1
+      }, {
+        "name" : "description",
+        "namespace" : "urn:example:bank:v1",
+        "typeId" : "xs:string",
+        "minOccurs" : 0,
+        "maxOccurs" : 1
+      } ]
+    },
+    "xs:date" : {
+      "id" : "xs:date",
+      "kind" : "SIMPLE",
+      "base" : "DATE",
+      "enumValues" : [ ],
+      "fields" : [ ]
+    },
+    "TransactionType" : {
+      "id" : "TransactionType",
+      "kind" : "SIMPLE",
+      "base" : "STRING",
+      "enumValues" : [ "DEBIT", "CREDIT" ],
+      "fields" : [ ]
+    }
+  }
+}

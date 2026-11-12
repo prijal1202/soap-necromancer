@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Legacy Bank Service, SOAP 1.1 document/literal.
+  This file is the demo backend contract AND the shared test fixture for every module.
+  Keep it inside the supported XSD core subset (see .kiro/steering/product.md).
+  The soap:address below is rewritten to the serving host when fetched via ?wsdl.
+-->
+<wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+                  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+                  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                  xmlns:tns="urn:example:bank:v1"
+                  name="LegacyBankService"
+                  targetNamespace="urn:example:bank:v1">
+
+  <wsdl:types>
+    <xs:schema targetNamespace="urn:example:bank:v1" elementFormDefault="qualified">
+
+      <xs:simpleType name="TransactionType">
+        <xs:restriction base="xs:string">
+          <xs:enumeration value="DEBIT"/>
+          <xs:enumeration value="CREDIT"/>
+        </xs:restriction>
+      </xs:simpleType>
+
+      <xs:complexType name="StatementLine">
+        <xs:sequence>
+          <xs:element name="transactionId" type="xs:string"/>
+          <xs:element name="date" type="xs:date"/>
+          <xs:element name="type" type="tns:TransactionType"/>
+          <xs:element name="amount" type="xs:decimal"/>
+          <xs:element name="description" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+      </xs:complexType>
+
+      <xs:element name="GetBalanceRequest">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="accountId" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="GetBalanceResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="accountId" type="xs:string"/>
+            <xs:element name="balance" type="xs:decimal"/>
+            <xs:element name="currency" type="xs:string"/>
+            <xs:element name="overdraftAllowed" type="xs:boolean"/>
+            <xs:element name="asOf" type="xs:dateTime"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="TransferRequest">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="fromAccountId" type="xs:string"/>
+            <xs:element name="toAccountId" type="xs:string"/>
+            <xs:element name="amount" type="xs:decimal"/>
+            <xs:element name="memo" type="xs:string" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="TransferResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="transactionId" type="xs:string"/>
+            <xs:element name="newBalance" type="xs:decimal"/>
+            <xs:element name="executedAt" type="xs:dateTime"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+      <xs:element name="GetStatementRequest">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="accountId" type="xs:string"/>
+            <xs:element name="maxLines" type="xs:int" minOccurs="0"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="GetStatementResponse">
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element name="accountId" type="xs:string"/>
+            <xs:element name="line" type="tns:StatementLine" minOccurs="0" maxOccurs="unbounded"/>
+          </xs:sequence>
+        </xs:complexType>
+      </xs:element>
+
+    </xs:schema>
+  </wsdl:types>
+
+  <wsdl:message name="GetBalanceRequest"><wsdl:part name="parameters" element="tns:GetBalanceRequest"/></wsdl:message>
+  <wsdl:message name="GetBalanceResponse"><wsdl:part name="parameters" element="tns:GetBalanceResponse"/></wsdl:message>
+  <wsdl:message name="TransferRequest"><wsdl:part name="parameters" element="tns:TransferRequest"/></wsdl:message>
+  <wsdl:message name="TransferResponse"><wsdl:part name="parameters" element="tns:TransferResponse"/></wsdl:message>
+  <wsdl:message name="GetStatementRequest"><wsdl:part name="parameters" element="tns:GetStatementRequest"/></wsdl:message>
+  <wsdl:message name="GetStatementResponse"><wsdl:part name="parameters" element="tns:GetStatementResponse"/></wsdl:message>
+
+  <wsdl:portType name="BankPortType">
+    <wsdl:operation name="GetBalance">
+      <wsdl:documentation>Returns the current balance of an account.</wsdl:documentation>
+      <wsdl:input message="tns:GetBalanceRequest"/>
+      <wsdl:output message="tns:GetBalanceResponse"/>
+    </wsdl:operation>
+    <wsdl:operation name="Transfer">
+      <wsdl:documentation>Moves funds between two accounts.</wsdl:documentation>
+      <wsdl:input message="tns:TransferRequest"/>
+      <wsdl:output message="tns:TransferResponse"/>
+    </wsdl:operation>
+    <wsdl:operation name="GetStatement">
+      <wsdl:documentation>Lists recent transactions for an account, newest first.</wsdl:documentation>
+      <wsdl:input message="tns:GetStatementRequest"/>
+      <wsdl:output message="tns:GetStatementResponse"/>
+    </wsdl:operation>
+  </wsdl:portType>
+
+  <wsdl:binding name="BankSoapBinding" type="tns:BankPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <wsdl:operation name="GetBalance">
+      <soap:operation soapAction="urn:example:bank:v1:GetBalance"/>
+      <wsdl:input><soap:body use="literal"/></wsdl:input>
+      <wsdl:output><soap:body use="literal"/></wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="Transfer">
+      <soap:operation soapAction="urn:example:bank:v1:Transfer"/>
+      <wsdl:input><soap:body use="literal"/></wsdl:input>
+      <wsdl:output><soap:body use="literal"/></wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="GetStatement">
+      <soap:operation soapAction="urn:example:bank:v1:GetStatement"/>
+      <wsdl:input><soap:body use="literal"/></wsdl:input>
+      <wsdl:output><soap:body use="literal"/></wsdl:output>
+    </wsdl:operation>
+  </wsdl:binding>
+
+  <wsdl:service name="LegacyBankService">
+    <wsdl:port name="BankPort" binding="tns:BankSoapBinding">
+      <soap:address location="http://localhost:8080/mock-bank/ws"/>
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>

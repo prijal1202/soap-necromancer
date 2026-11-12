@@ -1,0 +1,11 @@
+target/
+.idea/
+*.iml
+.vscode/
+node_modules/
+*.log
+.env
+.DS_Store
+spikes/**/target/
+.jqwik-database
+build.log

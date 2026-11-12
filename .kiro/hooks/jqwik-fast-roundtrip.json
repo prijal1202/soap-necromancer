@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "jqwik fast round-trip tests",
+      "trigger": "PostFileSave",
+      "description": "On save in core/, runtime/, generators/ sources or generator templates, runs only fast-tagged tests (jqwik round-trip properties, converter examples, generator golden tests) with a capped try count (100). Test phase only, so the failsafe generated-project IT never runs here.",
+      "matcher": "(core|runtime|generators)[\\\\/]src[\\\\/].*\\.java$|generators[\\\\/]src[\\\\/]main[\\\\/]resources[\\\\/]templates[\\\\/]",
+      "action": {
+        "type": "command",
+        "command": "mvn -B -q -pl runtime,core,generators -am test -Dgroups=fast -Djqwik.tries=100",
+        "timeout": 180
+      }
+    }
+  ]
+}
