@@ -96,6 +96,15 @@ accounts every 30 minutes (`MOCKBANK_RESET_INTERVAL`), on restart, and on `POST 
 `/api/health`. Render provides `PORT` and `RENDER_EXTERNAL_URL`; the app binds the first and uses the
 second as the public mock-bank address in `/api/sample-wsdl` (`PUBLIC_BASE_URL` overrides it).
 
+The free plan gives 0.1 CPU, so the image is tuned for startup: a Class Data Sharing archive built
+during `docker build` and a C1-only JIT. Measured at `--cpus 0.1 --memory 512m` it is healthy in
+about 23 s (versus 65-86 s for the plain jar), and peaks under 115 MB.
+
+Render spins a free service down after 15 minutes idle. `.github/workflows/keep-alive.yml` pings
+`/api/health` every 10 minutes once the repository variable `RENDER_URL` is set. One always-on free
+service fits Render's 750 free instance hours a month; GitHub can delay scheduled runs, so an
+occasional cold start is still possible.
+
 ## Pointing at a real SOAP endpoint
 
 Generate from the real WSDL, then start the generated proxy with `SOAP_ENDPOINT` set to the

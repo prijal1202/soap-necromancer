@@ -83,3 +83,12 @@ server, `GeneratedProjectIT.mcpTransferKeepsEveryDigit` failed. The agent asked 
 8. **MCP tool schemas grow quadratically.** Each tool embeds every type it reaches, so 200 operations
    sharing 1,000 types means 200,000 schema definitions, built in memory before any size check could
    see them. The generator now counts first and refuses (`LIMIT_TOOL_SCHEMAS`) in milliseconds.
+
+## Cold start on 0.1 CPU (Task 12 prep)
+
+9. **Measure the real limits, not the host.** On the host JVM sized to 512 MB the app was healthy
+   in 3.2 s. In a container at Render free's 0.1 CPU the same jar took 65-86 s, enough for a judge to
+   give up. Memory stayed under 165 MB throughout; CPU was the whole problem. A CDS archive built in
+   the Dockerfile plus a C1-only JIT brought it to about 23 s (two runs), with a lower memory peak.
+   Spring lazy init was measured too and dropped: no gain, and it would let a broken bean pass the
+   health check. Numbers and method: `docs/decisions.md` section 3.4.

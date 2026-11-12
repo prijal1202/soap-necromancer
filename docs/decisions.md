@@ -60,7 +60,7 @@ One decision per topic. Spike code lives in `spikes/` and is not part of the Mav
 
   Verdict: about 30% of the 512 MB budget, so no memory tuning is needed. Not covered: CPU throttling.
   This ran on the host JVM, not in a container, because the Docker CLI hung during the check. The real
-  `--memory 512m --cpus` container run moves to Task 12; expect a slower cold start there.
+  `--memory 512m --cpus 0.1` container run is in section 3.4: CPU, not memory, dominates there.
 
 - Design change from the measurement: the generation cap (`necromancer.max-concurrent=4`) first
   rejected a burst immediately (4 of 8 got 503) although a generation takes ~20 ms. It now waits up
@@ -70,6 +70,42 @@ One decision per topic. Spike code lives in `spikes/` and is not part of the Mav
   refuses to start if the port is busy and prints the measured app's own "Started" log line.
 - Implications already in the design: stateless `POST /api/generate` returning the zip, in-memory
   zip building, upload size limit, no disk writes.
+
+### 3.4 Cold start in a real container at Render free limits. PASS
+
+- Decision: the `Dockerfile` builds a CDS archive (Spring Boot 3.5 recipe: `jarmode=tools extract`,
+  training run with `-XX:ArchiveClassesAtExit` and `spring.context.exit=onRefresh`) and runs with
+  `-XX:SharedArchiveFile` and `-XX:TieredStopAtLevel=1`. Training and runtime share one
+  `JAVA_TOOL_OPTIONS`, so the archive matches. Lazy initialization is not used.
+- Why: memory was never the constraint (section 3 above); CPU is. At 0.1 CPU, Spring's context
+  refresh alone took 26.5 s on the plain jar, and C2 compiler threads compete for the same share.
+- Evidence: `spikes/render-web/ContainerMeasure.java` runs the image detached with
+  `--memory 512m --memory-swap 512m --cpus 0.1 -e PORT=10010`, reads the cgroup memory files, and
+  times 10 sequential bank generations plus 4 concurrent ones. Time is from `docker run` to the first
+  200 from `/api/health`.
+
+  | Image                             | Healthy after  | Spring "Started in" | cgroup peak | First / warm generate |
+  | --------------------------------- | -------------- | ------------------- | ----------- | --------------------- |
+  | Plain jar (previous `Dockerfile`) | 65 s\*, 86 s   | 54 s, 67 s          | 164 MB      | 5.9 s / 0.4-1.1 s     |
+  | + CDS                             | 41 s, 46 s     | 35 s, 38 s          | 113-119 MB  | 4.0-4.6 s / 0.3-0.9 s |
+  | + CDS + lazy init                 | 41 s           | 34 s                | 123 MB      | 3.6 s / 0.3-1.0 s     |
+  | + CDS + C1 only (current)         | 23.6 s, 23.4 s | 18.6 s, 19.0 s      | 95-111 MB   | 2.2-3.0 s / 0.2-0.6 s |
+
+  \* process uptime from the app's own log line; that run's harness lost its `docker run` client.
+  All runs: 4 concurrent uploads all 200, no OOM events. One host, few samples: treat the numbers as
+  ranges, not benchmarks.
+
+- Lazy init rejected: no measurable gain on top of CDS, and it moves bean failures from startup to
+  the first request, which would hide a broken deploy behind a passing health check.
+- C1 only costs peak throughput for long-running hot code; generation here is short and warm
+  generations got faster, not slower, at 0.1 CPU.
+- Not covered: Render's own image pull and scheduling time before the JVM starts (Render quotes
+  about a minute for a free spin-up). The keep-alive workflow (`.github/workflows/keep-alive.yml`,
+  every 10 min against the 15 min idle spin-down) avoids most cold starts; 750 free instance hours a
+  month cover one always-on service (https://render.com/docs/free).
+- Harness pitfall: an attached `docker run` client dropped its connection after 18 s on Docker
+  Desktop while the container kept running, which ended a measurement with "healthy=false". The
+  harness now runs detached and polls `docker inspect`.
 
 ## 4. OpenAPI: emit YAML directly from the canonical model. DECIDED
 
