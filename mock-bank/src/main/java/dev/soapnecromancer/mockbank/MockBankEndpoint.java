@@ -16,7 +16,8 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * The "decades-old" bank: SOAP 1.1, document/literal, at {@value #PATH}.
- * GET {@value #PATH}?wsdl returns bank.wsdl with soap:address pointing at this host.
+ * GET {@value #PATH}?wsdl returns bank.wsdl with soap:address pointing at this
+ * host.
  */
 @RestController
 @RequestMapping(MockBankEndpoint.PATH)
@@ -26,21 +27,31 @@ public class MockBankEndpoint {
     private static final String WSDL_DEFAULT_ADDRESS = "http://localhost:8080/mock-bank/ws";
 
     private final BankLedger ledger;
-    private final String publicUrl;
+    private final String publicBaseUrl;
     private final String wsdlTemplate;
 
-    public MockBankEndpoint(BankLedger ledger, @Value("${mockbank.public-url:}") String publicUrl) throws IOException {
+    /**
+     * @param publicBaseUrl public origin of this app, e.g.
+     *                      {@code https://soap-necromancer.onrender.com}.
+     *                      When blank, the address is derived from the request
+     *                      (forwarded headers included).
+     */
+    public MockBankEndpoint(BankLedger ledger, @Value("${mockbank.public-base-url:}") String publicBaseUrl)
+            throws IOException {
         this.ledger = ledger;
-        this.publicUrl = publicUrl;
+        this.publicBaseUrl = publicBaseUrl.strip().replaceAll("/+$", "");
         this.wsdlTemplate = new ClassPathResource("bank.wsdl").getContentAsString(StandardCharsets.UTF_8);
     }
 
     @GetMapping(params = "wsdl", produces = MediaType.TEXT_XML_VALUE)
     public String wsdl() {
-        String address = publicUrl.isBlank()
+        String address = publicBaseUrl.isEmpty()
                 ? ServletUriComponentsBuilder.fromCurrentContextPath().path(PATH).toUriString()
-                : publicUrl;
-        return wsdlTemplate.replace(WSDL_DEFAULT_ADDRESS, address);
+                : publicBaseUrl + PATH;
+        // Forwarded headers come from the client: escape so they cannot break out of
+        // the attribute.
+        String attr = address.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;");
+        return wsdlTemplate.replace(WSDL_DEFAULT_ADDRESS, attr);
     }
 
     @PostMapping
@@ -109,7 +120,8 @@ public class MockBankEndpoint {
             SoapXml.add(line, "date", l.date());
             SoapXml.add(line, "type", l.type());
             SoapXml.add(line, "amount", l.amount().toPlainString());
-            if (l.description() != null) SoapXml.add(line, "description", l.description());
+            if (l.description() != null)
+                SoapXml.add(line, "description", l.description());
         }
     }
 }

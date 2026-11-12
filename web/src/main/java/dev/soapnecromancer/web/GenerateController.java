@@ -1,6 +1,8 @@
 package dev.soapnecromancer.web;
 
 import dev.soapnecromancer.core.ParseResult;
+import dev.soapnecromancer.core.Warning;
+import dev.soapnecromancer.core.WsdlParseException;
 import dev.soapnecromancer.core.WsdlParser;
 import dev.soapnecromancer.generators.GeneratedFiles;
 import dev.soapnecromancer.generators.Generator;
@@ -23,8 +25,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Semaphore;
 
 /**
  * The generator API. Stateless: {@code POST /api/generate} parses the uploaded
@@ -33,25 +35,29 @@ import java.util.concurrent.Semaphore;
  * stored, nothing is written
  * to disk, and the parser never fetches imported documents (SSRF;
  * docs/decisions.md section 2).
+ * Resource limits (parser Requirement 5, generators Requirement 5.6) turn
+ * hostile or huge inputs into 422.
  */
 @RestController
 public class GenerateController {
     private static final Logger log = LoggerFactory.getLogger(GenerateController.class);
     public static final MediaType ZIP = MediaType.parseMediaType("application/zip");
-    static final java.time.Duration QUEUE_WAIT = java.time.Duration.ofSeconds(5);
 
     private final WsdlParser parser = new WsdlParser();
-    private final Generator generator = new Generator();
+    private final Generator generator;
     private final MockBankEndpoint mockBank;
+    private final GenerationSlots slots;
     private final int maxUploadBytes;
-    private final Semaphore slots;
 
-    public GenerateController(MockBankEndpoint mockBank,
+    public GenerateController(MockBankEndpoint mockBank, GenerationSlots slots,
             @Value("${necromancer.max-upload-bytes}") int maxUploadBytes,
-            @Value("${necromancer.max-concurrent}") int maxConcurrent) {
+            @Value("${necromancer.max-output-bytes:" + Generator.DEFAULT_MAX_OUTPUT_BYTES + "}") long maxOutputBytes,
+            @Value("${necromancer.max-tool-definitions:" + Generator.DEFAULT_MAX_TOOL_DEFINITIONS
+                    + "}") int maxToolDefinitions) {
         this.mockBank = mockBank;
+        this.slots = slots;
         this.maxUploadBytes = maxUploadBytes;
-        this.slots = new Semaphore(maxConcurrent);
+        this.generator = new Generator(maxOutputBytes, maxToolDefinitions);
     }
 
     /**
@@ -80,23 +86,22 @@ public class GenerateController {
     private ResponseEntity<byte[]> generate(byte[] wsdl) {
         if (wsdl.length == 0)
             throw new BadUpload(HttpStatus.BAD_REQUEST, "The upload is empty. Send a WSDL 1.1 document.");
-        // Bursts queue briefly: a generation takes ~20 ms warm, so failing fast only
-        // hurts double-clicks.
-        // The cap protects the 512 MB budget; 503 only when a slot stays busy for
-        // QUEUE_WAIT.
-        try {
-            if (!slots.tryAcquire(QUEUE_WAIT.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
-                throw new BadUpload(HttpStatus.SERVICE_UNAVAILABLE,
-                        "The generator is busy. Try again in a few seconds.");
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BadUpload(HttpStatus.SERVICE_UNAVAILABLE, "The generator is shutting down.");
-        }
+        slots.acquire();
         try {
             long start = System.nanoTime();
-            ParseResult result = parser.parse(wsdl);
-            GeneratedFiles files = generator.generate(result);
+            ParseResult result;
+            GeneratedFiles files;
+            try {
+                result = parser.parse(wsdl);
+                files = generator.generate(result);
+            } catch (StackOverflowError e) {
+                // Last resort. The parser limits should make this unreachable; a public
+                // endpoint still
+                // answers 422 instead of 500 if some construct slips past them.
+                log.warn("generation overflowed the stack; reported as LIMIT_COMPLEXITY");
+                throw new WsdlParseException("The WSDL is too complex to process",
+                        List.of(new Warning("LIMIT_COMPLEXITY", "Too deeply nested to process", "definitions")));
+            }
             byte[] zip = files.zip();
             log.info("generated {} ({} operations, {} warnings, {} files, {} bytes) in {} ms",
                     result.model().name(), result.model().operations().size(), result.warnings().size(),
@@ -150,5 +155,4 @@ public class GenerateController {
     private static String ascii(String s) {
         return s.replaceAll("[^\\x20-\\x7E]", "?");
     }
-
 }

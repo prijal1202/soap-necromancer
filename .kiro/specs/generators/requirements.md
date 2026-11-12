@@ -88,6 +88,8 @@ an agent like Kiro can call the legacy service.
 3. The zip SHALL be deterministic: entries sorted, fixed timestamps, so the same WSDL always gives identical bytes.
 4. Java package and artifact names SHALL be derived from the service name, sanitized to valid identifiers.
 5. The generated `README.md` SHALL explain how to run the generated proxy and the generated MCP server, and list the warnings.
+6. The generator SHALL refuse, without building them, outputs over a size budget: MCP tool schemas needing more than 20,000 `$defs` entries in total (`LIMIT_TOOL_SCHEMAS`; they grow as operations x reachable types), and a zip over 16 MB (`LIMIT_OUTPUT`). Both raise `GenerationLimitException`, reported as 422.
+7. Types that recurse through optional fields SHALL generate, and their generated tests SHALL terminate (the copied `ModelArbitraries` cuts recursion once a type repeats on a path).
 
 ### Requirement 6: Decimal exactness end to end
 

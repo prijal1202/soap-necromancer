@@ -134,6 +134,22 @@ public final class JsonSchemas {
     }
 
     /**
+     * How many named types {@link #toolInput} would put under {@code $defs} for
+     * this type.
+     */
+    public int reachableNamedCount(String typeId) {
+        java.util.Set<String> defs = new java.util.HashSet<>();
+        TypeModel t = model.type(typeId);
+        if (t.isComplex()) {
+            for (FieldModel f : t.fields())
+                collectNamed(f.typeId(), defs);
+        } else {
+            collectNamed(typeId, defs);
+        }
+        return defs.size();
+    }
+
+    /**
      * Whether a tool for this input type takes {@code {value: ...}} instead of the
      * object itself.
      */

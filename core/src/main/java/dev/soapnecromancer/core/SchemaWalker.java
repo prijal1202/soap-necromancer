@@ -27,10 +27,15 @@ final class SchemaWalker {
     private final Map<String, TypeModel> types = new LinkedHashMap<>();
     private final Map<XmlSchemaType, String> resolved = new IdentityHashMap<>();
     private final Set<String> warnedBuiltIns = new HashSet<>();
+    private final int maxTypes;
+    private final int maxDepth;
+    private int depth;
 
-    SchemaWalker(XmlSchemaCollection collection, List<Warning> warnings) {
+    SchemaWalker(XmlSchemaCollection collection, List<Warning> warnings, int maxTypes, int maxDepth) {
         this.collection = collection;
         this.warnings = warnings;
+        this.maxTypes = maxTypes;
+        this.maxDepth = maxDepth;
     }
 
     Map<String, TypeModel> types() {
@@ -95,15 +100,34 @@ final class SchemaWalker {
         if (existing != null)
             return existing;
         String id = uniqueId(t.getName() != null ? t.getName() : preferredId);
+        // Parser Requirement 5.3/5.4: checked during the walk so a long chain of named
+        // types
+        // cannot overflow the stack (each level is several frames deep).
+        if (types.size() >= maxTypes) {
+            limit("LIMIT_TYPES", "More than " + maxTypes + " types are reachable from the operations", location);
+        }
+        if (depth >= maxDepth) {
+            limit("LIMIT_DEPTH", "Types nest or reference each other more than " + maxDepth + " levels deep", location);
+        }
         resolved.put(t, id);
         // Reserve the slot before recursing so recursive types terminate and keep a
         // stable order.
         types.put(id, null);
         String loc = location + "/type[" + id + "]";
-        TypeModel model = t instanceof XmlSchemaComplexType ct ? complex(id, ct, loc)
-                : simple(id, (XmlSchemaSimpleType) t, loc);
-        types.put(id, model);
+        depth++;
+        try {
+            TypeModel model = t instanceof XmlSchemaComplexType ct ? complex(id, ct, loc)
+                    : simple(id, (XmlSchemaSimpleType) t, loc);
+            types.put(id, model);
+        } finally {
+            depth--;
+        }
         return id;
+    }
+
+    private void limit(String code, String message, String location) {
+        warnings.add(new Warning(code, message, location));
+        throw new WsdlParseException(message + ". The generator stops here to protect the service.", warnings);
     }
 
     private String uniqueId(String base) {

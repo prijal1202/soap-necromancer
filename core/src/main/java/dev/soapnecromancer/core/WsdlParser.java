@@ -40,6 +40,24 @@ public final class WsdlParser {
             "http://schemas.xmlsoap.org/ws/2005/07/securitypolicy",
             "http://docs.oasis-open.org/ws-sx/ws-securitypolicy/200702");
 
+    /**
+     * Parser Requirement 5. XML depth is fixed in
+     * {@link SecureXml#MAX_ELEMENT_DEPTH}.
+     */
+    public record Limits(int maxOperations, int maxTypes, int maxTypeDepth) {
+        public static final Limits DEFAULT = new Limits(200, 1000, 64);
+    }
+
+    private final Limits limits;
+
+    public WsdlParser() {
+        this(Limits.DEFAULT);
+    }
+
+    public WsdlParser(Limits limits) {
+        this.limits = Objects.requireNonNull(limits);
+    }
+
     public ParseResult parse(byte[] wsdl) {
         Document doc = SecureXml.parse(wsdl);
         Element root = doc.getDocumentElement();
@@ -60,7 +78,7 @@ public final class WsdlParser {
         scanSecurity(root, warnings);
 
         XmlSchemaCollection schemas = readSchemas(root, warnings);
-        SchemaWalker walker = new SchemaWalker(schemas, warnings);
+        SchemaWalker walker = new SchemaWalker(schemas, warnings, limits.maxTypes(), limits.maxTypeDepth());
 
         List<OperationModel> operations = new ArrayList<>();
         List<Port> ports = soap11Ports(def, warnings);
@@ -81,6 +99,16 @@ public final class WsdlParser {
             serviceName = def.getQName() != null ? def.getQName().getLocalPart() : "SoapService";
         }
 
+        int operationCount = 0;
+        for (Binding binding : bindings)
+            operationCount += binding.getBindingOperations().size();
+        if (operationCount > limits.maxOperations()) {
+            warnings.add(new Warning("LIMIT_OPERATIONS", operationCount + " operations; the limit is "
+                    + limits.maxOperations(), "definitions"));
+            throw new WsdlParseException("Too many operations (" + operationCount + " > " + limits.maxOperations()
+                    + "). Split the WSDL or generate a subset.", warnings);
+        }
+
         for (Binding binding : bindings) {
             String style = bindingStyle(binding);
             for (Object o : binding.getBindingOperations()) {
@@ -96,7 +124,64 @@ public final class WsdlParser {
         }
         ServiceModel model = new ServiceModel(serviceName, def.getTargetNamespace(), endpoint, operations,
                 walker.types());
+        List<String> cycle = requiredCycle(model);
+        if (!cycle.isEmpty()) {
+            warnings.add(new Warning("UNSATISFIABLE_RECURSION", "Required fields form a cycle "
+                    + String.join(" -> ", cycle) + "; no finite message exists", "type[" + cycle.get(0) + "]"));
+            throw new WsdlParseException("Type " + cycle.get(0)
+                    + " can never be sent: its required fields contain itself (" + String.join(" -> ", cycle) + ")",
+                    warnings);
+        }
         return new ParseResult(model, warnings);
+    }
+
+    /**
+     * A cycle of complex types through fields with minOccurs >= 1, as a path that
+     * starts and ends at
+     * the same type, or empty. Optional recursion (a tree) is fine and not
+     * reported.
+     */
+    static List<String> requiredCycle(ServiceModel model) {
+        Map<String, Integer> state = new HashMap<>(); // 1 = on the DFS stack, 2 = done
+        Deque<String> stack = new ArrayDeque<>();
+        for (String id : model.types().keySet()) {
+            List<String> c = requiredCycle(model, id, state, stack);
+            if (!c.isEmpty())
+                return c;
+        }
+        return List.of();
+    }
+
+    private static List<String> requiredCycle(ServiceModel model, String id, Map<String, Integer> state,
+            Deque<String> stack) {
+        var type = model.type(id);
+        if (!type.isComplex() || state.getOrDefault(id, 0) == 2)
+            return List.of();
+        if (state.getOrDefault(id, 0) == 1) {
+            List<String> path = new ArrayList<>();
+            boolean in = false;
+            for (Iterator<String> it = stack.descendingIterator(); it.hasNext();) {
+                String s = it.next();
+                if (s.equals(id))
+                    in = true;
+                if (in)
+                    path.add(s);
+            }
+            path.add(id);
+            return path;
+        }
+        state.put(id, 1);
+        stack.push(id);
+        for (var f : type.fields()) {
+            if (f.minOccurs() >= 1) {
+                List<String> c = requiredCycle(model, f.typeId(), state, stack);
+                if (!c.isEmpty())
+                    return c;
+            }
+        }
+        stack.pop();
+        state.put(id, 2);
+        return List.of();
     }
 
     /**

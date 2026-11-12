@@ -1,0 +1,10 @@
+**/target/
+.git/
+.kiro/
+.idea/
+.vscode/
+docs/
+spikes/
+frontend/node_modules/
+*.log
+*.txt

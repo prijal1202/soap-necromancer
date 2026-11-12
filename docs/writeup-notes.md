@@ -65,3 +65,21 @@ Proof it matters end to end: with the SDK's default mapper planted back into the
 server, `GeneratedProjectIT.mcpTransferKeepsEveryDigit` failed. The agent asked to transfer
 `1234567890.123456789`; the bank received `1234567890.1234567` and reported a new balance of
 `-1234567740.1234567`. With the configured mapper, every digit arrives.
+
+## Hardening the public endpoint (Task 10 follow-up)
+
+6. **Recursive WSDLs would have broken every generated proxy's own tests.** Writing a round-trip
+   property for a tree type (`RecursiveTypeProperties`) before touching code produced a
+   `StackOverflowError` straight away: `ModelArbitraries` built arbitraries eagerly, recursing
+   forever. Every generated proxy ships that helper, and the random-model generator only ever built
+   acyclic models, so nothing had caught it. It now cuts recursion once a type repeats on a path.
+
+7. **A 2 MB upload could crash the generator through the type graph, not the XML.** A chain of 5,000
+   named types (`T0 -> T1 -> ...`) is shallow XML but drives the schema walker 5,000 levels deep. On
+   Render's 512 KB stack that is a `StackOverflowError`, a 500. The parser now checks depth and type
+   count while walking. Proof: with the depth check disabled, `req5_4_longChainCannotOverflowA512kStack`
+   failed with a real `StackOverflowError`; with it, the upload is a clean 422 `LIMIT_DEPTH`.
+
+8. **MCP tool schemas grow quadratically.** Each tool embeds every type it reaches, so 200 operations
+   sharing 1,000 types means 200,000 schema definitions, built in memory before any size check could
+   see them. The generator now counts first and refuses (`LIMIT_TOOL_SCHEMAS`) in milliseconds.

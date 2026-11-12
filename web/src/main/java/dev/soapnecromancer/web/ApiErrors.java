@@ -1,7 +1,10 @@
 package dev.soapnecromancer.web;
 
+import dev.soapnecromancer.core.Warning;
 import dev.soapnecromancer.core.WsdlParseException;
+import dev.soapnecromancer.generators.GenerationLimitException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -12,6 +15,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+
+import java.util.List;
 
 /**
  * RFC 7807 errors for the generator API. An advice rather than controller
@@ -28,7 +33,23 @@ class ApiErrors {
 
     @ExceptionHandler(BadUpload.class)
     ResponseEntity<ProblemDetail> badUpload(BadUpload e) {
-        return problem(e.status, "Upload rejected", e.getMessage());
+        ResponseEntity<ProblemDetail> r = problem(e.status, "Upload rejected", e.getMessage());
+        if (e.retryAfterSeconds <= 0)
+            return r;
+        return ResponseEntity.status(r.getStatusCode()).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(e.retryAfterSeconds)).body(r.getBody());
+    }
+
+    /**
+     * Output that would be too large (generators Requirement 5.6): same 422 shape
+     * as an unusable WSDL.
+     */
+    @ExceptionHandler(GenerationLimitException.class)
+    ResponseEntity<ProblemDetail> outputTooLarge(GenerationLimitException e) {
+        ResponseEntity<ProblemDetail> r = problem(HttpStatus.UNPROCESSABLE_ENTITY, "WSDL cannot be resurrected",
+                e.getMessage() + ". The hosted generator refuses it to protect the service.");
+        r.getBody().setProperty("warnings", List.of(new Warning(e.code(), e.getMessage(), "output")));
+        return r;
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)

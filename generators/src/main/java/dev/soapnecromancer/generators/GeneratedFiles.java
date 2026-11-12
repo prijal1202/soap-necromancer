@@ -13,11 +13,32 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-/** The generator's output: relative path -> bytes, plus a deterministic zip (generators Requirement 5.3). */
+/**
+ * The generator's output: relative path -> bytes, plus a deterministic zip
+ * (generators Requirement 5.3).
+ */
 public final class GeneratedFiles {
     static final LocalDateTime ZIP_TIME = LocalDateTime.of(2026, 1, 1, 0, 0);
 
     private final Map<String, byte[]> files = new LinkedHashMap<>();
+    private final long maxTotalBytes;
+    private long totalBytes;
+
+    public GeneratedFiles() {
+        this(Long.MAX_VALUE);
+    }
+
+    /**
+     * @param maxTotalBytes cap on the sum of all file sizes; exceeding it throws
+     *                      GenerationLimitException
+     */
+    public GeneratedFiles(long maxTotalBytes) {
+        this.maxTotalBytes = maxTotalBytes;
+    }
+
+    public long totalBytes() {
+        return totalBytes;
+    }
 
     /** Text files are stored UTF-8 with LF line endings. */
     public void add(String path, String text) {
@@ -29,9 +50,14 @@ public final class GeneratedFiles {
                 || List.of(path.split("/")).stream().anyMatch(p -> p.equals("..") || p.equals("."))) {
             throw new IllegalArgumentException("unsafe generated path: " + path);
         }
+        if (totalBytes + content.length > maxTotalBytes) {
+            throw new GenerationLimitException("LIMIT_OUTPUT", "The generated project would exceed "
+                    + maxTotalBytes + " bytes (at " + path + ")");
+        }
         if (files.putIfAbsent(path, content.clone()) != null) {
             throw new IllegalStateException("generated path written twice: " + path);
         }
+        totalBytes += content.length;
     }
 
     public Map<String, byte[]> files() {
@@ -40,11 +66,15 @@ public final class GeneratedFiles {
 
     public String text(String path) {
         byte[] b = files.get(path);
-        if (b == null) throw new IllegalArgumentException("not generated: " + path);
+        if (b == null)
+            throw new IllegalArgumentException("not generated: " + path);
         return new String(b, StandardCharsets.UTF_8);
     }
 
-    /** Entries sorted by path, fixed timestamps: the same input always yields identical bytes. */
+    /**
+     * Entries sorted by path, fixed timestamps: the same input always yields
+     * identical bytes.
+     */
     public byte[] zip() {
         List<String> names = new ArrayList<>(files.keySet());
         Collections.sort(names);

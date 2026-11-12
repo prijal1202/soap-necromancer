@@ -65,6 +65,20 @@ XML convert without data loss.
 10. Type ids SHALL be unique and stable for the same input.
 11. WHEN a complex type has two fields with the same local name THEN the parser SHALL keep the first, drop the rest and emit `XSD_DUPLICATE_FIELD` (field names are JSON property names).
 
+### Requirement 5: Resource limits
+
+**User Story:** As the operator of a public generator on 512 MB, I want hostile or huge WSDLs to
+fail fast with a clear reason, so that one upload cannot crash the service or block other users.
+
+#### Acceptance Criteria
+
+1. WHEN the XML nests deeper than 256 elements THEN the parser SHALL return a fatal error.
+2. WHEN the WSDL has more than 200 binding operations THEN the parser SHALL return a fatal error with warning `LIMIT_OPERATIONS`.
+3. WHEN more than 1000 distinct types are reachable from the operations THEN the parser SHALL stop and return a fatal error with `LIMIT_TYPES`.
+4. WHEN a chain of nested or referenced types is deeper than 64 THEN the parser SHALL stop and return a fatal error with `LIMIT_DEPTH`. Limits 3 and 4 SHALL be checked while walking, so the walk never overflows the stack.
+5. WHEN complex types form a cycle through required fields (minOccurs >= 1), so that no finite value exists, THEN the parser SHALL return a fatal error with `UNSATISFIABLE_RECURSION` naming the types.
+6. Recursion through optional or zero-minimum repeated fields (for example a tree) SHALL remain supported.
+
 ### Requirement 4: Output
 
 #### Acceptance Criteria

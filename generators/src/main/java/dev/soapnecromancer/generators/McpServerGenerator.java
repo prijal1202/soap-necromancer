@@ -13,9 +13,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Generator: canonical model -> {@code mcp-server/**}, the generated MCP server (generators spec,
- * Requirement 4). A plain Java 21 project on the MCP Java SDK, stdio transport, one tool per
- * operation. Tool definitions are data ({@code tools.json}), so one small template serves every WSDL.
+ * Generator: canonical model -> {@code mcp-server/**}, the generated MCP server
+ * (generators spec,
+ * Requirement 4). A plain Java 21 project on the MCP Java SDK, stdio transport,
+ * one tool per
+ * operation. Tool definitions are data ({@code tools.json}), so one small
+ * template serves every WSDL.
  */
 public final class McpServerGenerator {
     static final String ROOT = "mcp-server/";
@@ -36,7 +39,8 @@ public final class McpServerGenerator {
         ctx.put("mcpKey", Names.artifactId(model.name(), "soap"));
         List<Map<String, String>> readmeTools = new ArrayList<>();
         for (Map<String, Object> t : tools) {
-            readmeTools.add(Map.of("name", (String) t.get("name"), "description", Escapes.markdown((String) t.get("description"))));
+            readmeTools.add(Map.of("name", (String) t.get("name"), "description",
+                    Escapes.markdown((String) t.get("description"))));
         }
         ctx.put("tools", readmeTools);
 
@@ -45,14 +49,37 @@ public final class McpServerGenerator {
         out.add(ROOT + "src/main/java/" + pkg.replace('.', '/') + "/McpServerMain.java",
                 Templates.render("mcp/McpServerMain.java", ctx));
         out.add(ROOT + "src/main/resources/tools.json", ModelJson.write(tools));
-        out.add(ROOT + "src/main/resources/simplelogger.properties", Templates.render("mcp/simplelogger.properties", ctx));
+        out.add(ROOT + "src/main/resources/simplelogger.properties",
+                Templates.render("mcp/simplelogger.properties", ctx));
     }
 
     public static String artifactId(ServiceModel model) {
         return Names.artifactId(model.name(), "mcp-server");
     }
 
-    /** One tool per operation: name, operation (proxy path), description, wrapped flag, inputSchema. */
+    /**
+     * Each tool embeds every named type it reaches under $defs, so the total grows
+     * as
+     * operations x reachable types (200 operations sharing 1,000 types would be
+     * 200,000 definitions).
+     * Counts that total cheaply and refuses before any schema map is built.
+     */
+    static void checkSchemaSize(ServiceModel model, int maxDefinitions) {
+        JsonSchemas schemas = new JsonSchemas(model, List.of(), "#/$defs/", false);
+        long total = 0;
+        for (OperationModel op : model.operations()) {
+            total += schemas.reachableNamedCount(op.input().typeId());
+            if (total > maxDefinitions) {
+                throw new GenerationLimitException("LIMIT_TOOL_SCHEMAS", "The MCP tool schemas would need more than "
+                        + maxDefinitions + " type definitions (operations x shared types)");
+            }
+        }
+    }
+
+    /**
+     * One tool per operation: name, operation (proxy path), description, wrapped
+     * flag, inputSchema.
+     */
     static List<Map<String, Object>> tools(ServiceModel model) {
         JsonSchemas schemas = new JsonSchemas(model, List.of(), "#/$defs/", false);
         Set<String> used = new HashSet<>();
@@ -60,7 +87,8 @@ public final class McpServerGenerator {
         for (OperationModel op : model.operations()) {
             String base = Names.tool(op.name());
             String name = base;
-            for (int i = 2; !used.add(name); i++) name = base + "_" + i;
+            for (int i = 2; !used.add(name); i++)
+                name = base + "_" + i;
 
             Map<String, Object> t = new LinkedHashMap<>();
             t.put("name", name);

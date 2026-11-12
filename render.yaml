@@ -1,0 +1,14 @@
+# Render Blueprint: one free Docker web service running the generator and the bundled mock-bank.
+# Render sets PORT and RENDER_EXTERNAL_URL itself; the app binds the first and advertises the second
+# as the mock-bank address in /api/sample-wsdl.
+services:
+  - type: web
+    name: soap-necromancer
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: MOCKBANK_RESET_INTERVAL
+        value: PT30M

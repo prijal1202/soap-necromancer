@@ -121,17 +121,51 @@ public final class ModelArbitraries {
      * {@code typeId}.
      */
     public static Arbitrary<Object> values(ServiceModel model, String typeId) {
+        return values(model, typeId, new HashMap<>(), 0);
+    }
+
+    /**
+     * How often one complex type may repeat on a path before its optional fields
+     * stay empty.
+     */
+    static final int MAX_TYPE_REPEATS = 2;
+    /** Longest path of complex types; deeper means required fields form a cycle. */
+    static final int MAX_PATH = 200;
+
+    /**
+     * Arbitraries are built eagerly, so a recursive type would recurse forever
+     * (StackOverflowError,
+     * found by RecursiveTypeProperties). {@code onPath} counts complex types on the
+     * current path; once
+     * a type repeats MAX_TYPE_REPEATS times, fields that may be empty are empty.
+     */
+    private static Arbitrary<Object> values(ServiceModel model, String typeId, Map<String, Integer> onPath, int depth) {
         TypeModel t = model.type(typeId);
+        if (t.isComplex()) {
+            if (depth > MAX_PATH) {
+                throw new IllegalArgumentException(
+                        "Type " + typeId + " has no finite values: its required fields form a cycle");
+            }
+            onPath.merge(typeId, 1, Integer::sum);
+            try {
+                return complexValues(model, t, onPath, depth);
+            } finally {
+                onPath.merge(typeId, -1, Integer::sum);
+            }
+        }
         if (t.isEnum())
             return Arbitraries.of(t.enumValues()).map(v -> (Object) v);
-        if (!t.isComplex())
-            return builtIn(t.base());
+        return builtIn(t.base());
+    }
+
+    private static Arbitrary<Object> complexValues(ServiceModel model, TypeModel t, Map<String, Integer> onPath,
+            int depth) {
         if (t.fields().isEmpty())
             return Arbitraries.just(Map.of());
 
         List<Arbitrary<Optional<Object>>> parts = new ArrayList<>();
         for (FieldModel f : t.fields())
-            parts.add(fieldValue(model, f));
+            parts.add(fieldValue(model, f, onPath, depth));
         return Combinators.combine(parts).as(values -> {
             Map<String, Object> obj = new LinkedHashMap<>();
             for (int i = 0; i < values.size(); i++) {
@@ -143,8 +177,16 @@ public final class ModelArbitraries {
         });
     }
 
-    private static Arbitrary<Optional<Object>> fieldValue(ServiceModel model, FieldModel f) {
-        Arbitrary<Object> single = values(model, f.typeId());
+    private static Arbitrary<Optional<Object>> fieldValue(ServiceModel model, FieldModel f, Map<String, Integer> onPath,
+            int depth) {
+        boolean saturated = model.type(f.typeId()).isComplex()
+                && onPath.getOrDefault(f.typeId(), 0) >= MAX_TYPE_REPEATS;
+        if (saturated && f.minOccurs() == 0) {
+            // Recursion cut-off: the field may be empty, so it is (repeated fields stay
+            // present as []).
+            return Arbitraries.just(f.repeated() ? Optional.of((Object) List.of()) : Optional.empty());
+        }
+        Arbitrary<Object> single = values(model, f.typeId(), onPath, depth + 1);
         if (f.repeated()) {
             int max = f.maxOccurs() == FieldModel.UNBOUNDED ? 3 : f.maxOccurs();
             return single.list().ofMinSize(f.minOccurs()).ofMaxSize(max).map(l -> Optional.of((Object) l));

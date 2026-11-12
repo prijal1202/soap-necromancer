@@ -213,6 +213,88 @@ class GenerateApiTest {
         assertThat(p.get("warnings").toString()).contains("SOAP12_BINDING");
     }
 
+    // ------------------------------------------------------------------ generation
+    // blow-up (422, never 500)
+
+    /** A WSDL with n operations sharing one request type, built from a template. */
+    static byte[] wsdlWithOperations(int n, String types, String requestType) {
+        StringBuilder pt = new StringBuilder(), b = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            pt.append("<wsdl:operation name=\"Op").append(i)
+                    .append("\"><wsdl:input message=\"tns:In\"/><wsdl:output message=\"tns:Out\"/></wsdl:operation>");
+            b.append("<wsdl:operation name=\"Op").append(i).append("\"><s:operation soapAction=\"urn:t:Op").append(i)
+                    .append("\"/><wsdl:input><s:body use=\"literal\"/></wsdl:input><wsdl:output><s:body use=\"literal\"/></wsdl:output></wsdl:operation>");
+        }
+        String xml = """
+                <wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:s="http://schemas.xmlsoap.org/wsdl/soap/"
+                    xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:tns="urn:t" targetNamespace="urn:t">
+                  <wsdl:types><xs:schema targetNamespace="urn:t" elementFormDefault="qualified">
+                    %s
+                    <xs:element name="Req" type="%s"/>
+                    <xs:element name="Res"><xs:complexType><xs:sequence><xs:element name="ok" type="xs:boolean"/></xs:sequence></xs:complexType></xs:element>
+                  </xs:schema></wsdl:types>
+                  <wsdl:message name="In"><wsdl:part name="p" element="tns:Req"/></wsdl:message>
+                  <wsdl:message name="Out"><wsdl:part name="p" element="tns:Res"/></wsdl:message>
+                  <wsdl:portType name="PT">%s</wsdl:portType>
+                  <wsdl:binding name="B" type="tns:PT"><s:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>%s</wsdl:binding>
+                  <wsdl:service name="Huge"><wsdl:port name="P" binding="tns:B"><s:address location="http://legacy.example/ws"/></wsdl:port></wsdl:service>
+                </wsdl:definitions>"""
+                .formatted(types, requestType, pt, b);
+        return xml.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static final String TREE = """
+            <xs:complexType name="Node"><xs:sequence>
+              <xs:element name="label" type="xs:string"/>
+              <xs:element name="child" type="tns:Node" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence></xs:complexType>""";
+
+    private void assert422(HttpResponse<byte[]> r, String warningCode) throws IOException {
+        assertThat(r.statusCode()).as(new String(r.body(), StandardCharsets.UTF_8)).isEqualTo(422);
+        JsonNode p = problem(r);
+        assertThat(p.get("title").asText()).isEqualTo("WSDL cannot be resurrected");
+        assertThat(p.get("warnings").toString()).contains(warningCode);
+    }
+
+    @Test
+    void recursiveTypeIsSupported() throws Exception {
+        HttpResponse<byte[]> r = postRaw(wsdlWithOperations(1, TREE, "tns:Node"), "text/xml");
+        assertThat(r.statusCode()).isEqualTo(200);
+        assertThat(new String(unzip(r.body()).get("mcp-server/src/main/resources/tools.json"), StandardCharsets.UTF_8))
+                .contains("#/$defs/Node");
+    }
+
+    @Test
+    void tooManyOperationsIs422() throws Exception {
+        assert422(postRaw(wsdlWithOperations(201, TREE, "tns:Node"), "text/xml"), "LIMIT_OPERATIONS");
+    }
+
+    @Test
+    void requiredSelfReferenceIs422() throws Exception {
+        String loop = "<xs:complexType name=\"Loop\"><xs:sequence><xs:element name=\"next\" type=\"tns:Loop\"/></xs:sequence></xs:complexType>";
+        assert422(postRaw(wsdlWithOperations(1, loop, "tns:Loop"), "text/xml"), "UNSATISFIABLE_RECURSION");
+    }
+
+    @Test
+    void deeplyNestedXmlIs422() throws Exception {
+        String deep = "<a>".repeat(400) + "</a>".repeat(400);
+        HttpResponse<byte[]> r = postRaw(deep.getBytes(StandardCharsets.UTF_8), "text/xml");
+        assertThat(r.statusCode()).isEqualTo(422);
+    }
+
+    // ------------------------------------------------------------------ behind
+    // Render's proxy
+
+    @Test
+    void sampleWsdlHonoursForwardedHeaders() throws Exception {
+        HttpResponse<String> r = HTTP.send(HttpRequest.newBuilder(URI.create(url("/api/sample-wsdl")))
+                .header("X-Forwarded-Proto", "https")
+                .header("X-Forwarded-Host", "soap-necromancer.onrender.com")
+                .header("X-Forwarded-Port", "443")
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(r.body()).contains("location=\"https://soap-necromancer.onrender.com/mock-bank/ws\"");
+    }
+
     @Test
     void notXmlIs422() throws Exception {
         assertThat(postRaw("hello".getBytes(StandardCharsets.UTF_8), "text/xml").statusCode()).isEqualTo(422);

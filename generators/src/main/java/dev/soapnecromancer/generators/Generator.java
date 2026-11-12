@@ -18,10 +18,28 @@ import java.util.Map;
  * no disk, no network, no state. Generators spec, Requirement 5.
  */
 public final class Generator {
+    /** Generators Requirement 5.6. The bank WSDL produces about 0.3 MB. */
+    public static final long DEFAULT_MAX_OUTPUT_BYTES = 16L * 1024 * 1024;
+    public static final int DEFAULT_MAX_TOOL_DEFINITIONS = 20_000;
+
+    private final long maxOutputBytes;
+    private final int maxToolDefinitions;
+
+    public Generator() {
+        this(DEFAULT_MAX_OUTPUT_BYTES, DEFAULT_MAX_TOOL_DEFINITIONS);
+    }
+
+    public Generator(long maxOutputBytes, int maxToolDefinitions) {
+        this.maxOutputBytes = maxOutputBytes;
+        this.maxToolDefinitions = maxToolDefinitions;
+    }
 
     public GeneratedFiles generate(ParseResult result) {
         ServiceModel model = result.model();
-        GeneratedFiles out = new GeneratedFiles();
+        // Checked before anything is built: MCP tool schemas grow as operations x
+        // reachable types.
+        McpServerGenerator.checkSchemaSize(model, maxToolDefinitions);
+        GeneratedFiles out = new GeneratedFiles(maxOutputBytes);
         out.add("model.json", ModelJson.write(model));
         out.add("openapi.yaml", new OpenApiGenerator().generate(model));
         out.add("generator-report.json", ModelJson.write(report(model, result.warnings())));
