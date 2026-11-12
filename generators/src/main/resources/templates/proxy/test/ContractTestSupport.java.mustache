@@ -1,0 +1,88 @@
+package {{package}};
+
+import com.fasterxml.jackson.core.StreamWriteFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import dev.soapnecromancer.runtime.JsonXmlConverter;
+import dev.soapnecromancer.runtime.ModelArbitraries;
+import dev.soapnecromancer.runtime.model.ElementRef;
+import dev.soapnecromancer.runtime.model.ServiceModel;
+import io.restassured.RestAssured;
+import io.restassured.specification.RequestSpecification;
+import net.jqwik.api.sessions.JqwikSession;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Random;
+
+/**
+ * Shared setup for the generated contract tests: the generated proxy on a random port, pointed at
+ * one {@link StubSoapServer}. Every contract test class extends this, so they share one Spring context.
+ * Request and response values are drawn from the model with fixed seeds, so runs are repeatable.
+ */
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+abstract class ContractTestSupport {
+    static final StubSoapServer STUB = StubSoapServer.start();
+
+    /** BigDecimal in and plain notation out, matching the generated proxy (generators Requirement 6). */
+    static final ObjectMapper JSON = JsonMapper.builder()
+            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+            .enable(StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN)
+            .build();
+
+    @DynamicPropertySource
+    static void soapEndpoint(DynamicPropertyRegistry registry) {
+        registry.add("soap.endpoint", STUB::url);
+        registry.add("soap.read-timeout", () -> "5s");
+    }
+
+    @LocalServerPort
+    protected int port;
+
+    @Autowired
+    protected ServiceModel model;
+
+    @Autowired
+    protected JsonXmlConverter converter;
+
+    @BeforeEach
+    void resetStub() {
+        STUB.reset();
+    }
+
+    protected RequestSpecification client() {
+        return RestAssured.given().port(port)
+                .contentType("application/json; charset=UTF-8")
+                .accept("application/json, application/problem+json");
+    }
+
+    /** A canonical JSON value of {@code typeId}, the same for the same seed. */
+    protected Object sample(String typeId, long seed) {
+        JqwikSession.start();
+        try {
+            return ModelArbitraries.values(model, typeId).generator(100).next(new Random(seed)).value();
+        } finally {
+            JqwikSession.finish();
+        }
+    }
+
+    protected static String json(Object value) throws IOException {
+        return JSON.writeValueAsString(value);
+    }
+
+    protected static Object parse(byte[] body) throws IOException {
+        return JSON.readValue(new String(body, StandardCharsets.UTF_8), Object.class);
+    }
+
+    /** Normalizes parsed JSON (e.g. a small long read back as Integer) to the converter's canonical form. */
+    protected Object canonical(ElementRef ref, Object json) {
+        return converter.toJson(ref, converter.toXml(ref, json));
+    }
+}

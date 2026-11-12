@@ -37,6 +37,17 @@ curl -X POST http://localhost:8080/{{firstOperation}} -H "Content-Type: applicat
 Errors are RFC 7807 `application/problem+json`: 400 for invalid JSON or a SOAP Client fault,
 502 for a SOAP Server fault or unusable response, 504 for a timeout.
 
+## Tests
+
+`mvn test` in `proxy/` runs, with no real SOAP endpoint needed:
+
+- REST Assured contract tests, one class per operation, against a stub SOAP server: valid
+  requests (fixed seeds), unknown fields, SOAP Client and Server faults, non-SOAP error pages, and
+  decimal exactness where an operation takes a decimal.
+- jqwik properties: JSON -> XML -> JSON is lossless for every operation, any legal XML rendering
+  reads back the same, absent optional fields stay absent, decimals keep every digit.
+  Set the try count with `mvn test -Djqwik.tries=100`.
+
 ## Warnings
 
 {{#hasWarnings}}

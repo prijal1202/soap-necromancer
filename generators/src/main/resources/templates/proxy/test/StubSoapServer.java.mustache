@@ -1,0 +1,100 @@
+package {{package}};
+
+import com.sun.net.httpserver.HttpServer;
+import dev.soapnecromancer.runtime.RuntimeXml;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+/**
+ * Stand-in SOAP backend for the generated contract tests: records every request and answers with
+ * whatever the test configured. Lets the tests run with no real SOAP endpoint (Requirement 3.6).
+ */
+final class StubSoapServer {
+    static final String SOAP_ENV = "http://schemas.xmlsoap.org/soap/envelope/";
+
+    record Received(String soapAction, String contentType, String body) {}
+
+    private final HttpServer server;
+    private final List<Received> received = new CopyOnWriteArrayList<>();
+    private volatile int status;
+    private volatile String reply;
+
+    private StubSoapServer() {
+        try {
+            server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        server.createContext("/soap", exchange -> {
+            String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            received.add(new Received(exchange.getRequestHeaders().getFirst("SOAPAction"),
+                    exchange.getRequestHeaders().getFirst("Content-Type"), body));
+            byte[] out = reply.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "text/xml; charset=utf-8");
+            exchange.sendResponseHeaders(status, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        reset();
+        server.start();
+    }
+
+    static StubSoapServer start() {
+        return new StubSoapServer();
+    }
+
+    String url() {
+        return "http://127.0.0.1:" + server.getAddress().getPort() + "/soap";
+    }
+
+    /** Forget requests; until configured, answer every call with a Server fault. */
+    void reset() {
+        received.clear();
+        reply(500, fault("soap:Server", "stub reply not configured"));
+    }
+
+    void reply(int status, String body) {
+        this.status = status;
+        this.reply = body;
+    }
+
+    int requestCount() {
+        return received.size();
+    }
+
+    Received last() {
+        if (received.isEmpty()) throw new AssertionError("the stub SOAP server received no request");
+        return received.get(received.size() - 1);
+    }
+
+    /** First element inside soap:Body of the last request. */
+    Element lastPayload() throws Exception {
+        Element env = RuntimeXml.parse(last().body()).getDocumentElement();
+        for (Node b = env.getFirstChild(); b != null; b = b.getNextSibling()) {
+            if (b instanceof Element body && "Body".equals(body.getLocalName())) {
+                for (Node n = body.getFirstChild(); n != null; n = n.getNextSibling()) {
+                    if (n instanceof Element e) return e;
+                }
+            }
+        }
+        throw new AssertionError("no payload in soap:Body: " + last().body());
+    }
+
+    static String envelope(String payload) {
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soap:Envelope xmlns:soap=\"" + SOAP_ENV + "\"><soap:Body>"
+                + payload + "</soap:Body></soap:Envelope>";
+    }
+
+    static String fault(String code, String message) {
+        return envelope("<soap:Fault><faultcode>" + code + "</faultcode><faultstring>"
+                + message.replace("&", "&amp;").replace("<", "&lt;") + "</faultstring></soap:Fault>");
+    }
+}

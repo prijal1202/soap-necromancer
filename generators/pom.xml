@@ -52,6 +52,17 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- On the test classpath so ProxyGeneratorTest can javac the generated contract tests in-process. -->
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.rest-assured</groupId>
+      <artifactId>rest-assured</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <!-- GeneratedProjectIT starts mock-bank in-process as the SOAP backend. -->
       <groupId>dev.soapnecromancer</groupId>
       <artifactId>mock-bank</artifactId>

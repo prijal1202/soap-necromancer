@@ -28,10 +28,14 @@ Plan Task 7
 
 Plan Task 8
 
-- [ ] 8. `TestGenerator`: stub SOAP server, contract tests per operation, decimal-exactness contract cases
+- [x] 8. `TestGenerator`: stub SOAP server, shared Spring context, contract tests per operation (fixed-seed
+     valid requests, unknown field, Client/Server faults, non-SOAP error page), decimal-exactness cases
   - _Requirements: 3.1-3.4, 3.6, 6.3_
-- [ ] 9. Generated jqwik round-trip properties over model.json
+- [x] 9. Generated jqwik round-trip properties over model.json (3.1-3.3, 3.6), tagged `fast`
   - _Requirements: 3.5_
+- [x] 9a. `GeneratedProjectIT` asserts the generated tests ran inside the generated build (surefire reports,
+      zero failures/skips). Mutation check: Client fault mapped to 502 in the template failed every contract class.
+  - _Requirements: 3.6, 7.2_
 
 Plan Task 9
 

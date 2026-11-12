@@ -43,3 +43,11 @@ scale up to 20, same digits and same scale after JSON -> XML -> JSON. The genera
 
 5. **End-to-end exactness.** `GeneratedProjectIT` transfers `1234567890.123456789` through
    JSON -> generated proxy -> SOAP -> mock-bank and asserts the ledger holds exactly that value.
+
+## Generated tests have teeth (Task 8)
+
+Every generated proxy ships its own tests: REST Assured contract tests per operation against a stub
+SOAP server, plus jqwik round-trip properties over its own `model.json`. For bank.wsdl that is 20
+tests, all passing inside the generated project's `mvn package`. To check they can fail, the proxy
+template was changed to map SOAP Client faults to 502 instead of 400: the generated
+`soapClientFaultIs400WithTheFault` failed for every operation, which broke the generated build.

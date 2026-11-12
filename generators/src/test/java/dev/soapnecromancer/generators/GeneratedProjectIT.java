@@ -78,7 +78,10 @@ class GeneratedProjectIT {
         int bankPort = ((WebServerApplicationContext) mockBank).getWebServer().getPort();
 
         Path proxyDir = WORK.resolve("proxy");
-        run(proxyDir, WORK.resolve("proxy-build.log"), Duration.ofMinutes(10), maven("-B", "package"));
+        // "package" runs the generated proxy's own generated tests (contract tests +
+        // jqwik properties).
+        run(proxyDir, WORK.resolve("proxy-build.log"), Duration.ofMinutes(10),
+                maven("-B", "package", "-Djqwik.tries=200"));
 
         Path jar = proxyDir.resolve("target").resolve(ProxyGenerator.artifactId(
                 new WsdlParser().parse(OpenApiGeneratorTest.resource("bank.wsdl")).model()) + "-1.0.0.jar");
@@ -109,6 +112,37 @@ class GeneratedProjectIT {
     @BeforeEach
     void resetLedger() {
         mockBank.getBean(BankLedger.class).reset();
+    }
+
+    // ------------------------------------------------------------------ generated
+    // tests (Requirement 3.6)
+
+    /**
+     * The generated tests ran inside the generated proxy's own build, with no real
+     * SOAP backend.
+     */
+    @Test
+    void generatedContractTestsAndPropertiesRanAndPassed() throws Exception {
+        Path reports = WORK.resolve("proxy/target/surefire-reports");
+        Map<String, Integer> minTests = Map.of(
+                "GetBalanceContractTest", 5, "GetStatementContractTest", 5, "TransferContractTest", 6,
+                "RoundTripProperties", 4);
+        for (Map.Entry<String, Integer> e : minTests.entrySet()) {
+            Path xml = reports.resolve("TEST-generated.legacybankservice." + e.getKey() + ".xml");
+            assertThat(xml).as("surefire report for %s", e.getKey()).exists();
+            String head = Files.readString(xml, StandardCharsets.UTF_8);
+            head = head.substring(0, head.indexOf('>', head.indexOf("<testsuite")));
+            assertThat(attr(head, "tests")).as("%s tests", e.getKey()).isGreaterThanOrEqualTo(e.getValue());
+            assertThat(attr(head, "failures") + attr(head, "errors")).as("%s failures+errors", e.getKey()).isZero();
+            assertThat(attr(head, "skipped")).as("%s skipped", e.getKey()).isZero();
+        }
+    }
+
+    private static int attr(String tag, String name) {
+        var m = java.util.regex.Pattern.compile("\\b" + name + "=\"(\\d+)\"").matcher(tag);
+        if (!m.find())
+            throw new AssertionError("no " + name + " in " + tag);
+        return Integer.parseInt(m.group(1));
     }
 
     // ------------------------------------------------------------------ calls

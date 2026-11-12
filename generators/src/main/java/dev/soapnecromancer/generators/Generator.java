@@ -26,6 +26,7 @@ public final class Generator {
         out.add("openapi.yaml", new OpenApiGenerator().generate(model));
         out.add("generator-report.json", ModelJson.write(report(model, result.warnings())));
         new ProxyGenerator().generate(model, out);
+        new TestGenerator().generate(model, out);
         out.add("README.md", readme(model, result.warnings()));
         return out;
     }
