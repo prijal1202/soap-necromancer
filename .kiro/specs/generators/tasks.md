@@ -39,11 +39,17 @@ Plan Task 8
 
 Plan Task 9
 
-- [ ] 10. Decide MCP decimal handling (SDK mapper with BigDecimal, else string schema); record in decisions.md
+- [x] 10. Decide MCP decimal handling: configured `JacksonMcpJsonMapper` (BigDecimal), decimals stay
+      `type: number`; spike showed the SDK default turns 1234567890.123456789 into a double (decisions.md section 7)
   - _Requirements: 6.2, 6.4_
-- [ ] 11. `McpServerGenerator`: tools.json, main class, stderr logging, README + Kiro snippet
+- [x] 11. `McpServerGenerator`: tools.json (JSON Schema with `$defs`, simple roots wrapped as `{value}`), main
+      class, stderr logging, shaded jar, README + Kiro snippet; `$ref`-resolution property over random models;
+      in-process javac against the real SDK
   - _Requirements: 4.1-4.6_
-- [ ] 12. `GeneratedProjectIT` part 2: stdio `tools/list` + `tools/call` GetBalance through the generated proxy
-  - _Requirements: 4.4, 7.2_
+- [x] 12. `GeneratedProjectIT` part 2: mvn package the generated MCP server, java -jar over stdio:
+      `tools/list`, `tools/call` GetBalance and Transfer (exact decimal to the ledger), SOAP fault as
+      `isError`, schema-invalid argument rejected before SOAP. Mutation check: SDK default mapper in the
+      template failed the exact-decimal test (bank received 1234567890.1234567)
+  - _Requirements: 4.4, 4.5, 6.2, 7.2_
 - [x] 13. Extend the Kiro hook to `generators` fast tests (done early, before Task 6 code)
   - _Requirements: 7.1, 7.3_

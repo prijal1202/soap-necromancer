@@ -96,10 +96,40 @@ class GeneratedProjectIT {
         pb.environment().put("SOAP_ENDPOINT", "http://127.0.0.1:" + bankPort + "/mock-bank/ws");
         proxy = pb.start();
         awaitHealthy(Duration.ofSeconds(90));
+
+        // Generated MCP server, launched the way Kiro does: java -jar over stdio,
+        // PROXY_URL set.
+        Path mcpDir = WORK.resolve("mcp-server");
+        run(mcpDir, WORK.resolve("mcp-build.log"), Duration.ofMinutes(10), maven("-B", "package"));
+        Path mcpJar = mcpDir.resolve("target").resolve(McpServerGenerator.artifactId(
+                new WsdlParser().parse(OpenApiGeneratorTest.resource("bank.wsdl")).model()) + "-1.0.0.jar");
+        assertThat(mcpJar).exists();
+        ProcessBuilder mpb = new ProcessBuilder(javaBin(), "-Xmx128m", "-jar", mcpJar.toString())
+                .redirectError(WORK.resolve("mcp-stderr.log").toFile());
+        mpb.environment().put("PROXY_URL", proxyUrl);
+        mcp = mpb.start();
+        mcpIn = new java.io.BufferedWriter(
+                new java.io.OutputStreamWriter(mcp.getOutputStream(), StandardCharsets.UTF_8));
+        mcpOut = new java.io.BufferedReader(
+                new java.io.InputStreamReader(mcp.getInputStream(), StandardCharsets.UTF_8));
+        JsonNode init = rpc("initialize",
+                "{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"GeneratedProjectIT\",\"version\":\"1\"}}");
+        assertThat(init.get("result").get("serverInfo").get("name").asText()).isEqualTo("LegacyBankService");
+        send("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
     }
+
+    private static Process mcp;
+    private static java.io.BufferedWriter mcpIn;
+    private static java.io.BufferedReader mcpOut;
+    private static int rpcId = 1;
 
     @AfterAll
     static void stop() throws InterruptedException {
+        if (mcp != null) {
+            mcp.destroy();
+            if (!mcp.waitFor(10, TimeUnit.SECONDS))
+                mcp.destroyForcibly();
+        }
         if (proxy != null) {
             proxy.destroy();
             if (!proxy.waitFor(15, TimeUnit.SECONDS))
@@ -218,6 +248,93 @@ class GeneratedProjectIT {
         HttpResponse<String> r = post("/GetBalance", "{\"accountId\":");
         assertThat(r.statusCode()).isEqualTo(400);
         assertThat(JSON.readTree(r.body()).get("path").asText()).isEqualTo("$");
+    }
+
+    // ------------------------------------------------------------------ generated
+    // MCP server (Requirement 4)
+
+    @Test
+    void mcpListsOneToolPerOperationWithObjectSchemas() throws Exception {
+        JsonNode tools = rpc("tools/list", "{}").get("result").get("tools");
+        List<String> names = new ArrayList<>();
+        tools.forEach(t -> {
+            names.add(t.get("name").asText());
+            assertThat(t.get("inputSchema").get("type").asText()).isEqualTo("object");
+        });
+        assertThat(names).containsExactlyInAnyOrder("GetBalance", "Transfer", "GetStatement");
+    }
+
+    @Test
+    void mcpGetBalanceReturnsTheBackendsData() throws Exception {
+        JsonNode r = callTool("GetBalance", "{\"accountId\":\"ACC-1001\"}");
+        assertThat(r.get("isError").asBoolean()).as(r.toString()).isFalse();
+        assertThat(text(r)).contains("\"balance\":2500.00").contains("\"currency\":\"USD\"");
+    }
+
+    /**
+     * Generators Requirement 6.2: an agent's decimal reaches the SOAP ledger digit
+     * for digit.
+     */
+    @Test
+    void mcpTransferKeepsEveryDigit() throws Exception {
+        JsonNode r = callTool("Transfer",
+                "{\"fromAccountId\":\"ACC-1002\",\"toAccountId\":\"ACC-2001\",\"amount\":1234567890.123456789}");
+        assertThat(r.get("isError").asBoolean()).as(r.toString()).isFalse();
+        assertThat(text(r)).contains("\"newBalance\":-1234567740.123456789");
+        assertThat(mockBank.getBean(BankLedger.class).account("ACC-2001").balance())
+                .isEqualTo(new BigDecimal("1234567890.123456789"));
+    }
+
+    @Test
+    void mcpSoapFaultIsAnErrorResultTheAgentCanRead() throws Exception {
+        JsonNode r = callTool("Transfer", "{\"fromAccountId\":\"ACC-2001\",\"toAccountId\":\"ACC-1001\",\"amount\":5}");
+        assertThat(r.get("isError").asBoolean()).isTrue();
+        assertThat(text(r)).contains("HTTP 400").contains("Insufficient funds");
+    }
+
+    @Test
+    void mcpRejectsArgumentsThatBreakTheSchemaBeforeCallingSoap() throws Exception {
+        JsonNode r = callTool("Transfer",
+                "{\"fromAccountId\":\"ACC-1001\",\"toAccountId\":\"ACC-2001\",\"amount\":\"12.50\"}");
+        assertThat(r.get("isError").asBoolean()).isTrue();
+        assertThat(mockBank.getBean(BankLedger.class).account("ACC-2001").balance()).isEqualByComparingTo("0");
+    }
+
+    private static JsonNode callTool(String name, String argumentsJson) throws Exception {
+        JsonNode response = rpc("tools/call", "{\"name\":\"" + name + "\",\"arguments\":" + argumentsJson + "}");
+        assertThat(response.has("result")).as(response.toString()).isTrue();
+        return response.get("result");
+    }
+
+    private static String text(JsonNode toolResult) {
+        return toolResult.get("content").get(0).get("text").asText();
+    }
+
+    private static synchronized JsonNode rpc(String method, String paramsJson) throws Exception {
+        int id = rpcId++;
+        send("{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"method\":\"" + method + "\",\"params\":" + paramsJson + "}");
+        while (true) {
+            String line = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                try {
+                    return mcpOut.readLine();
+                } catch (IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+            }).get(30, TimeUnit.SECONDS);
+            if (line == null) {
+                throw new AssertionError(
+                        "generated MCP server closed stdout:\n" + tail(WORK.resolve("mcp-stderr.log")));
+            }
+            JsonNode node = JSON.readTree(line); // every stdout line must be JSON-RPC (Requirement 4.5)
+            if (node.has("id") && node.get("id").asInt() == id)
+                return node;
+        }
+    }
+
+    private static void send(String json) throws IOException {
+        mcpIn.write(json);
+        mcpIn.write("\n");
+        mcpIn.flush();
     }
 
     // ------------------------------------------------------------------ helpers

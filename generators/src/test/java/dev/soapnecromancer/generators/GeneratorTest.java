@@ -29,7 +29,9 @@ class GeneratorTest {
         assertThat(files.files().keySet()).contains("model.json", "openapi.yaml", "generator-report.json", "README.md",
                 "proxy/pom.xml", "proxy/src/main/resources/model.json");
         assertThat(files.files().keySet()).allMatch(p -> p.equals("model.json") || p.equals("openapi.yaml")
-                || p.equals("generator-report.json") || p.equals("README.md") || p.startsWith("proxy/"));
+                || p.equals("generator-report.json") || p.equals("README.md") || p.startsWith("proxy/")
+                || p.startsWith("mcp-server/"));
+        assertThat(files.files().keySet()).contains("mcp-server/pom.xml", "mcp-server/src/main/resources/tools.json");
     }
 
     @Test
@@ -49,7 +51,8 @@ class GeneratorTest {
                 .contains("ignored 'policy'")
                 .contains("java -jar target/legacy-bank-service-proxy-1.0.0.jar")
                 .contains("- `POST /Transfer`: Moves funds between two accounts.");
-        assertThat(new Generator().generate(BANK).text("README.md")).contains("None. Every feature in the WSDL is supported.");
+        assertThat(new Generator().generate(BANK).text("README.md"))
+                .contains("None. Every feature in the WSDL is supported.");
     }
 
     @Test
@@ -61,7 +64,7 @@ class GeneratorTest {
         GeneratedFiles files = new Generator().generate(BANK);
         List<String> names = new ArrayList<>();
         try (ZipInputStream zin = new ZipInputStream(new ByteArrayInputStream(a))) {
-            for (ZipEntry e; (e = zin.getNextEntry()) != null; ) {
+            for (ZipEntry e; (e = zin.getNextEntry()) != null;) {
                 names.add(e.getName());
                 assertThat(e.getTimeLocal()).isEqualTo(GeneratedFiles.ZIP_TIME);
                 assertThat(zin.readAllBytes()).as(e.getName()).isEqualTo(files.files().get(e.getName()));

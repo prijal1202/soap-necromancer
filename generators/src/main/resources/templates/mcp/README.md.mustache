@@ -1,0 +1,48 @@
+# {{serviceName}}: generated MCP server
+
+Exposes every SOAP operation of {{serviceName}} as an MCP tool over stdio. Each tool call is
+forwarded as JSON to the generated proxy (`../proxy`), which calls the SOAP endpoint. Start the
+generated proxy first.
+
+Tools:
+
+{{#tools}}
+- `{{name}}`: {{description}}
+{{/tools}}
+
+## Build
+
+Requires Java 21 and Maven 3.9+.
+
+```
+mvn package
+```
+
+This produces `target/{{artifactId}}-1.0.0.jar`.
+
+## Use it from Kiro
+
+Add this to `.kiro/settings/mcp.json` (workspace) or `~/.kiro/settings/mcp.json` (user), with the
+absolute path to the jar:
+
+```json
+{
+  "mcpServers": {
+    "{{mcpKey}}": {
+      "command": "java",
+      "args": ["-jar", "/absolute/path/to/mcp-server/target/{{artifactId}}-1.0.0.jar"],
+      "env": { "PROXY_URL": "http://localhost:8080" }
+    }
+  }
+}
+```
+
+`PROXY_URL` is where the generated proxy listens (default `http://localhost:8080`).
+
+## Notes
+
+- Tool inputs are validated against their JSON Schema before anything is sent.
+- Decimal fields are JSON numbers and keep every digit (no floating point on the way to SOAP).
+- Errors (invalid input, SOAP faults, an unreachable proxy) come back as tool results with
+  `isError: true` and a readable message.
+- stdout carries the MCP protocol; logs go to stderr.

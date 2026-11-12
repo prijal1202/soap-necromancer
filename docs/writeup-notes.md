@@ -51,3 +51,17 @@ SOAP server, plus jqwik round-trip properties over its own `model.json`. For ban
 tests, all passing inside the generated project's `mvn package`. To check they can fail, the proxy
 template was changed to map SOAP Client faults to 502 instead of 400: the generated
 `soapClientFaultIs400WithTheFault` failed for every operation, which broke the generated build.
+
+## The MCP SDK's default JSON mapper would have rounded money (Task 9)
+
+Requirement 6.2 (written before the code) said tool arguments must arrive as `BigDecimal`. A spike
+checked it: with the MCP Java SDK's default mapper, an agent's transfer of `1234567890.123456789`
+arrives as `Double 1.2345678901234567E9`, so the last digits would never reach the bank, and
+`0.10` becomes `0.1`. With a configured `JacksonMcpJsonMapper` both arrive exactly. The generated
+MCP server ships the configured mapper, and the end-to-end test sends that amount through an MCP
+`tools/call` and checks the mock-bank ledger. See `docs/decisions.md` section 7.
+
+Proof it matters end to end: with the SDK's default mapper planted back into the generated MCP
+server, `GeneratedProjectIT.mcpTransferKeepsEveryDigit` failed. The agent asked to transfer
+`1234567890.123456789`; the bank received `1234567890.1234567` and reported a new balance of
+`-1234567740.1234567`. With the configured mapper, every digit arrives.

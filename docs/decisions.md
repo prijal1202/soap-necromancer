@@ -79,3 +79,23 @@ mcp-server/                generated MCP server: plain Java, mcp 2.1.0, shaded j
 ```
 
 `POST /api/generate` returns this zip directly. The UI unzips it client-side (vendored JSZip).
+
+## 7. Decimals in the generated MCP server (Task 9). PASS
+
+- Decision: the generated MCP server builds its stdio transport with
+  `new JacksonMcpJsonMapper(JsonMapper)` (Jackson 3) configured with `USE_BIG_DECIMAL_FOR_FLOATS`,
+  `JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES` disabled and `WRITE_BIGDECIMAL_AS_PLAIN`, and
+  forwards arguments to the generated proxy with the same mapper. Decimal fields stay `type: number`
+  in the tool `inputSchema`; the string fallback (generators Requirement 6.4) is not needed.
+- Evidence: `spikes/mcp-stdio` `DecimalMcpServer` + `DecimalDriver`, same tool, two mappers:
+
+  | Sent                   | SDK default mapper            | Configured mapper                 |
+  | ---------------------- | ----------------------------- | --------------------------------- |
+  | `0.10`                 | `Double 0.1`                  | `BigDecimal 0.10`                 |
+  | `1234567890.123456789` | `Double 1.2345678901234567E9` | `BigDecimal 1234567890.123456789` |
+  | `2500.00`              | `Double 2500.0`               | `BigDecimal 2500.00`              |
+  | `100`                  | `Integer 100`                 | `Integer 100`                     |
+
+- Also observed: the SDK validates arguments against `inputSchema` before the handler runs, so a
+  string `"12.50"` for a `number` field is rejected with `isError: true`. The schema is the contract
+  the agent sees, so this is the behaviour we want.

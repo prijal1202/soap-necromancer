@@ -27,6 +27,7 @@ public final class Generator {
         out.add("generator-report.json", ModelJson.write(report(model, result.warnings())));
         new ProxyGenerator().generate(model, out);
         new TestGenerator().generate(model, out);
+        new McpServerGenerator().generate(model, out);
         out.add("README.md", readme(model, result.warnings()));
         return out;
     }
@@ -47,6 +48,7 @@ public final class Generator {
         ctx.put("generatorVersion", Versions.GENERATOR);
         ctx.put("operationCount", model.operations().size());
         ctx.put("artifactId", ProxyGenerator.artifactId(model));
+        ctx.put("mcpArtifactId", McpServerGenerator.artifactId(model));
         String endpoint = ProxyGenerator.defaultEndpoint(model);
         ctx.put("endpointDisplay", endpoint == null ? "(none usable in the WSDL: set SOAP_ENDPOINT)" : endpoint);
         ctx.put("firstOperation", model.operations().get(0).name());
