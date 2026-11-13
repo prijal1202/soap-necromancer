@@ -6,9 +6,12 @@ services:
     name: soap-necromancer
     runtime: docker
     plan: free
+    # Pinned: without it the service follows the branch the Blueprint was created from, and a
+    # Blueprint sync overwrites a branch changed in the dashboard (render.com/docs/blueprint-spec).
+    branch: main
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
-    autoDeploy: true
+    autoDeployTrigger: commit
     envVars:
       - key: MOCKBANK_RESET_INTERVAL
         value: PT30M
