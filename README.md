@@ -10,8 +10,8 @@ Upload a WSDL 1.1 `document/literal` file. The generator parses it and returns a
 - a generated MCP server (one tool per SOAP operation),
 - REST Assured contract tests and jqwik JSON<->XML round-trip tests.
 
-> Status: generator, generated proxy, generated MCP server and web API work end to end.
-> UI and deployment are in progress. See `.kiro/steering/` for scope and architecture.
+> Live: https://soap-necromancer.onrender.com (Render free tier; the first request after a long idle
+> can take up to a minute). See `.kiro/steering/` for scope and architecture.
 
 ## Run the generator
 
@@ -20,8 +20,17 @@ mvn -pl web -am package -DskipTests
 java -jar web/target/soap-necromancer.jar
 ```
 
-It listens on `PORT` (default 8080) and also serves the bundled legacy bank SOAP service at
-`/mock-bank/ws`.
+Open http://localhost:8080. It listens on `PORT` (default 8080) and also serves the bundled legacy
+bank SOAP service at `/mock-bank/ws`. The build downloads a pinned Node to compile the UI; add
+`-Dskip.installnodenpm -Dskip.npm` to skip that and keep the last UI build.
+
+## Use the UI
+
+One page: drop a WSDL file (or click **Resurrect the sample bank WSDL**), then read the warnings,
+browse every generated file in tabs (README, OpenAPI, generated proxy, tests, generated MCP server,
+model and report), and download the zip. The browser unpacks the zip itself, so the server still
+holds nothing. A 422 shows the same warnings table with the reason the WSDL was rejected. Source and
+dev setup: `frontend/README.md`.
 
 ```
 curl -o bank.wsdl http://localhost:8080/api/sample-wsdl
@@ -118,7 +127,8 @@ service URL. The generated MCP server only needs `PROXY_URL`.
 | `core`       | WSDL parser and canonical model                                    |
 | `generators` | OpenAPI, generated proxy, generated tests, generated MCP server    |
 | `mock-bank`  | Legacy SOAP demo backend                                           |
-| `web`        | Generator API and static UI                                        |
+| `web`        | Generator API; serves the UI                                       |
+| `frontend/`  | One-page React UI, built into the `web` jar (not a Maven module)   |
 
 ## Build
 

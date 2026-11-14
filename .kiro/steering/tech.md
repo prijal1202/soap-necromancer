@@ -3,7 +3,11 @@
 ## Stack
 
 - Java 21, Spring Boot 3, Maven multi-module.
-- UI: a single static HTML page served by Spring Boot. React/Vite only if time allows.
+- UI: one page, React 19 + Vite + TypeScript in `frontend/`. The `web` Maven build installs a pinned
+  Node, runs `npm ci` and `npm run build`, and packs `dist/` into the jar as `static/`. Same origin as
+  the API, so no CORS. The zip is unpacked in the browser with `fflate`. Files are shown as plain
+  text, never as HTML (they contain text from the uploaded WSDL).
+- npm dependencies are pinned exactly (`frontend/.npmrc` sets `save-exact`) and installed with `npm ci`.
 - Deployment: one Docker container on Render, one JVM (generator web app + `mock-bank`).
 
 ## Invariants

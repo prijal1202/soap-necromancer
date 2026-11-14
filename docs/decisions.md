@@ -132,7 +132,10 @@ proxy/                     generated proxy: Spring Boot 3, runtime sources copie
 mcp-server/                generated MCP server: plain Java, mcp 2.1.0, shaded jar, its own pom.xml
 ```
 
-`POST /api/generate` returns this zip directly. The UI unzips it client-side (vendored JSZip).
+`POST /api/generate` returns this zip directly. The UI unzips it client-side with `fflate` 0.8.3
+(about 8 KB in the bundle, no dependencies) rather than the JSZip first planned, since the React
+build bundles npm packages anyway. The download button reuses the same bytes, so one request serves
+both the preview and the download.
 
 ## 7. Decimals in the generated MCP server (Task 9). PASS
 

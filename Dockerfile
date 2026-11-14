@@ -15,7 +15,9 @@ COPY runtime runtime
 COPY core core
 COPY generators generators
 COPY mock-bank mock-bank
+COPY frontend frontend
 COPY web web
+# The web module also downloads a pinned Node and builds the React UI (frontend/) into the jar.
 RUN mvn -B -q -pl web -am package -DskipTests
 
 # ---- run: JRE only, non-root, with a Class Data Sharing archive.

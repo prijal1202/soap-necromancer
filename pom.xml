@@ -35,6 +35,10 @@
     <jqwik.tries>1000</jqwik.tries>
     <maven-surefire.version>3.5.3</maven-surefire.version>
     <maven-compiler.version>3.14.0</maven-compiler.version>
+    <!-- UI build (web module): Maven downloads this exact Node into frontend/node, then runs npm ci. -->
+    <frontend-maven-plugin.version>2.0.2</frontend-maven-plugin.version>
+    <node.version>v24.21.0</node.version>
+    <maven-resources.version>3.3.1</maven-resources.version>
   </properties>
 
   <dependencyManagement>
@@ -95,6 +99,16 @@
           <groupId>org.springframework.boot</groupId>
           <artifactId>spring-boot-maven-plugin</artifactId>
           <version>${spring-boot.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>com.github.eirslett</groupId>
+          <artifactId>frontend-maven-plugin</artifactId>
+          <version>${frontend-maven-plugin.version}</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>${maven-resources.version}</version>
         </plugin>
       </plugins>
     </pluginManagement>

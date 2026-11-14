@@ -3,6 +3,9 @@ target/
 *.iml
 .vscode/
 node_modules/
+# UI build outputs: the Node that Maven downloads, and Vite's bundle (copied into the jar).
+frontend/node/
+frontend/dist/
 *.log
 .env
 .DS_Store

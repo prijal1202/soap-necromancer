@@ -8,8 +8,8 @@ runtime/           model-driven JSON<->XML converter + SOAP client; copied into 
 core/              WSDL parser, canonical model, unsupported-feature warnings
 generators/        OpenAPI, generated proxy, generated tests, generated MCP server
 mock-bank/         legacy SOAP 1.1 demo backend (library, mounted in-process by web)
-web/               generator API (POST /api/generate returns the zip), static UI, hosts mock-bank
-frontend/          placeholder; default UI is static HTML under web/
+web/               generator API (POST /api/generate returns the zip), serves the UI, hosts mock-bank
+frontend/          one-page React UI (Vite); built by web's Maven build into the jar's static/
 docs/decisions.md  spike outcomes (one decision per topic)
 spikes/            throwaway spike code
 .kiro/steering/    product.md, tech.md, structure.md
