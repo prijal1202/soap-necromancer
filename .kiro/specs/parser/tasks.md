@@ -14,5 +14,7 @@
   - _Requirements: 4.2_
 - [x] 7. Tests: golden `bank.wsdl`, negative fixtures per warning group, fatal cases
   - _Requirements: 4.1, 4.3, and all warning codes_
-- [ ] 8. Hardening from the production review: every `wsdl:types` stripped before WSDL4J plus a refusing locator; every processing error is fatal or a warning; document-order port and binding choice; unsupported bindings, missing address, duplicate and invalid operation names, header parts, invalid element names and occurrence bounds
+- [x] 8. Hardening from the production review: every `wsdl:types` stripped before WSDL4J plus a refusing locator; every processing error is fatal or a warning; document-order port and binding choice; unsupported bindings, missing address, duplicate and invalid operation names, header parts, invalid element names and occurrence bounds
   - _Requirements: 1.5, 1.6, 2.6, 2.10, 2.13-2.17, 3.12, 3.13_
+- [x] 9. SOAP 1.2 document/literal: `SoapVersion` in the model, a `SoapBinding` adapter over `soap:` and `soap12:` elements, version preference across ports
+  - _Requirements: 2.2, 2.3, 2.8, 2.10, 2.12, 2.15_

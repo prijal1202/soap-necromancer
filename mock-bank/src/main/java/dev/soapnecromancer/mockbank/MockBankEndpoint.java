@@ -21,22 +21,22 @@ import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
 /**
- * The "decades-old" bank: SOAP 1.1, document/literal, at {@value #PATH}.
- * GET {@value #PATH}?wsdl returns bank.wsdl with soap:address pointing at this
- * host. Public on the hosted demo, so every request is bounded in size, and
- * every failure is answered as a SOAP fault a SOAP client can read.
+ * The "decades-old" bank, document/literal: SOAP 1.1 at {@value #PATH}, SOAP
+ * 1.2 at {@value #PATH_12}, one shared ledger. GET {@code <path>?wsdl} returns
+ * the WSDL for that path with soap:address pointing at this host. Public on the
+ * hosted demo, so every request is bounded in size, and every failure is
+ * answered as a SOAP fault a SOAP client can read.
  */
 @RestController
-@RequestMapping(MockBankEndpoint.PATH)
 public class MockBankEndpoint {
     public static final String PATH = "/mock-bank/ws";
+    public static final String PATH_12 = "/mock-bank/ws12";
     /**
      * Bank requests are a few hundred bytes; this leaves room for verbose clients.
      */
     public static final int MAX_ENVELOPE_BYTES = 64 * 1024;
     private static final Logger log = LoggerFactory.getLogger(MockBankEndpoint.class);
-    private static final MediaType SOAP_11 = MediaType.parseMediaType("text/xml;charset=UTF-8");
-    private static final String WSDL_DEFAULT_ADDRESS = "http://localhost:8080/mock-bank/ws";
+    private static final String WSDL_DEFAULT_LOCATION = "location=\"http://localhost:8080/mock-bank/ws\"";
     /**
      * xs:decimal lexical space: no exponent, which also keeps BigDecimal arithmetic
      * cheap.
@@ -46,6 +46,7 @@ public class MockBankEndpoint {
     private final BankLedger ledger;
     private final String publicBaseUrl;
     private final String wsdlTemplate;
+    private final String wsdl12Template;
 
     /**
      * @param publicBaseUrl public origin of this app, e.g.
@@ -58,37 +59,81 @@ public class MockBankEndpoint {
         this.ledger = ledger;
         this.publicBaseUrl = publicBaseUrl.strip().replaceAll("/+$", "");
         this.wsdlTemplate = new ClassPathResource("bank.wsdl").getContentAsString(StandardCharsets.UTF_8);
+        this.wsdl12Template = soap12(wsdlTemplate);
     }
 
     /**
-     * bank.wsdl with this host's address. Not cacheable: the address can depend on
-     * request headers.
+     * The SOAP 1.2 WSDL is derived from bank.wsdl, which stays SOAP 1.1 because it
+     * is the golden test fixture. Only the WSDL SOAP binding namespace and the
+     * header comment change; soapAction and the transport URI are the same in
+     * both bindings.
+     */
+    static String soap12(String wsdl) {
+        return requireReplace(
+                requireReplace(wsdl, "xmlns:soap=\"http://schemas.xmlsoap.org/wsdl/soap/\"",
+                        "xmlns:soap=\"http://schemas.xmlsoap.org/wsdl/soap12/\""),
+                "Legacy Bank Service, SOAP 1.1 document/literal.",
+                "Legacy Bank Service, SOAP 1.2 document/literal (derived from bank.wsdl).");
+    }
+
+    private static String requireReplace(String s, String target, String replacement) {
+        if (!s.contains(target))
+            throw new IllegalStateException("bank.wsdl no longer contains: " + target);
+        return s.replace(target, replacement);
+    }
+
+    /**
+     * bank.wsdl (SOAP 1.1) with this host's address. Not cacheable: the address
+     * can depend on request headers.
      */
     public String wsdl() {
+        return withAddress(wsdlTemplate, PATH);
+    }
+
+    /** The SOAP 1.2 variant of {@link #wsdl()}, addressed at {@value #PATH_12}. */
+    public String wsdl12() {
+        return withAddress(wsdl12Template, PATH_12);
+    }
+
+    private String withAddress(String template, String path) {
         String address = publicBaseUrl.isEmpty()
-                ? ServletUriComponentsBuilder.fromCurrentContextPath().path(PATH).toUriString()
-                : publicBaseUrl + PATH;
+                ? ServletUriComponentsBuilder.fromCurrentContextPath().path(path).toUriString()
+                : publicBaseUrl + path;
         // Forwarded headers come from the client: escape so they cannot break out of
         // the attribute.
         String attr = address.replace("&", "&amp;").replace("\"", "&quot;").replace("<", "&lt;");
-        return wsdlTemplate.replace(WSDL_DEFAULT_ADDRESS, attr);
+        return template.replace(WSDL_DEFAULT_LOCATION, "location=\"" + attr + "\"");
     }
 
-    @GetMapping(params = "wsdl", produces = MediaType.TEXT_XML_VALUE)
+    @GetMapping(path = PATH, params = "wsdl", produces = MediaType.TEXT_XML_VALUE)
     public ResponseEntity<String> getWsdl() {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(wsdl());
     }
 
-    @PostMapping
+    @GetMapping(path = PATH_12, params = "wsdl", produces = MediaType.TEXT_XML_VALUE)
+    public ResponseEntity<String> getWsdl12() {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(wsdl12());
+    }
+
+    @PostMapping(PATH)
     public ResponseEntity<String> invoke(HttpServletRequest request) {
+        return handle(SoapVersion.SOAP_11, request);
+    }
+
+    @PostMapping(PATH_12)
+    public ResponseEntity<String> invoke12(HttpServletRequest request) {
+        return handle(SoapVersion.SOAP_12, request);
+    }
+
+    private ResponseEntity<String> handle(SoapVersion version, HttpServletRequest request) {
         try {
-            Element payload = SoapXml.bodyPayload(readEnvelope(request));
+            Element payload = SoapXml.bodyPayload(readEnvelope(request), version);
             if (!SoapXml.BANK_NS.equals(payload.getNamespaceURI())) {
                 throw MockBankFault.sender("Unknown namespace: " + BankLedger.shorten(String.valueOf(
                         payload.getNamespaceURI())));
             }
             Document out = SoapXml.newBuilder().newDocument();
-            Element body = SoapXml.newEnvelopeBody(out);
+            Element body = SoapXml.newEnvelopeBody(out, version);
             switch (payload.getLocalName()) {
                 case "GetBalanceRequest" -> getBalance(payload, body);
                 case "TransferRequest" -> transfer(payload, body);
@@ -96,21 +141,29 @@ public class MockBankEndpoint {
                 default -> throw MockBankFault.sender("Unknown operation: "
                         + BankLedger.shorten(payload.getLocalName()));
             }
-            return ResponseEntity.ok().contentType(SOAP_11).body(SoapXml.serialize(out));
+            return ResponseEntity.ok().contentType(version.mediaType()).body(SoapXml.serialize(out));
         } catch (MockBankFault f) {
-            return fault(f.code(), f.getMessage());
+            return fault(version, f.code(), f.getMessage());
         } catch (RuntimeException e) {
             // A SOAP client cannot read Spring's JSON error page; answer with a Server
             // fault instead.
             log.error("mock-bank request failed", e);
-            return fault(MockBankFault.Code.RECEIVER, "Internal error in the bank");
+            return fault(version, MockBankFault.Code.RECEIVER, "Internal error in the bank");
         }
     }
 
-    /** SOAP 1.1 mandates HTTP 500 for every fault. */
-    private static ResponseEntity<String> fault(MockBankFault.Code code, String message) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(SOAP_11)
-                .body(SoapXml.fault(code, message));
+    /**
+     * SOAP 1.1 answers every fault with HTTP 500. SOAP 1.2 (Part 2, 7.5.1.2) uses
+     * 400 for Sender and 500 for the rest. A VersionMismatch is always a SOAP 1.1
+     * envelope (SOAP 1.2 Part 1, Appendix A), so a 1.1 client can read it.
+     */
+    private static ResponseEntity<String> fault(SoapVersion version, MockBankFault.Code code, String message) {
+        SoapVersion in = code == MockBankFault.Code.VERSION_MISMATCH ? SoapVersion.SOAP_11 : version;
+        HttpStatus status = in == SoapVersion.SOAP_12 && code == MockBankFault.Code.SENDER
+                ? HttpStatus.BAD_REQUEST
+                : HttpStatus.INTERNAL_SERVER_ERROR;
+        return ResponseEntity.status(status).contentType(in.mediaType())
+                .body(SoapXml.fault(in, code, message));
     }
 
     /** Reads at most {@link #MAX_ENVELOPE_BYTES}; nothing larger is buffered. */

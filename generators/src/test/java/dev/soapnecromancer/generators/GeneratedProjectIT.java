@@ -95,7 +95,7 @@ class GeneratedProjectIT {
         pb.environment().put("PORT", String.valueOf(port));
         pb.environment().put("SOAP_ENDPOINT", "http://127.0.0.1:" + bankPort + "/mock-bank/ws");
         proxy = pb.start();
-        awaitHealthy(Duration.ofSeconds(90));
+        awaitHealthy(proxy, proxyUrl, WORK.resolve("proxy-run.log"), Duration.ofSeconds(90));
 
         // Generated MCP server, launched the way Kiro does: java -jar over stdio,
         // PROXY_URL set.
@@ -168,7 +168,7 @@ class GeneratedProjectIT {
         }
     }
 
-    private static int attr(String tag, String name) {
+    static int attr(String tag, String name) {
         var m = java.util.regex.Pattern.compile("\\b" + name + "=\"(\\d+)\"").matcher(tag);
         if (!m.find())
             throw new AssertionError("no " + name + " in " + tag);
@@ -348,12 +348,11 @@ class GeneratedProjectIT {
         return HTTP.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
     }
 
-    private static void awaitHealthy(Duration max) throws Exception {
+    static void awaitHealthy(Process proxy, String proxyUrl, Path log, Duration max) throws Exception {
         Instant deadline = Instant.now().plus(max);
         while (Instant.now().isBefore(deadline)) {
             if (!proxy.isAlive()) {
-                throw new AssertionError("generated proxy exited with " + proxy.exitValue() + ":\n"
-                        + tail(WORK.resolve("proxy-run.log")));
+                throw new AssertionError("generated proxy exited with " + proxy.exitValue() + ":\n" + tail(log));
             }
             try {
                 HttpResponse<String> r = HTTP.send(HttpRequest.newBuilder(URI.create(proxyUrl + "/health"))
@@ -365,11 +364,10 @@ class GeneratedProjectIT {
             }
             Thread.sleep(500);
         }
-        throw new AssertionError(
-                "generated proxy not healthy after " + max + ":\n" + tail(WORK.resolve("proxy-run.log")));
+        throw new AssertionError("generated proxy not healthy after " + max + ":\n" + tail(log));
     }
 
-    private static void run(Path dir, Path log, Duration timeout, List<String> command) throws Exception {
+    static void run(Path dir, Path log, Duration timeout, List<String> command) throws Exception {
         Process p = new ProcessBuilder(command).directory(dir.toFile()).redirectErrorStream(true)
                 .redirectOutput(log.toFile()).start();
         if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -379,24 +377,24 @@ class GeneratedProjectIT {
         assertThat(p.exitValue()).as("%s failed:%n%s", command, tail(log)).isZero();
     }
 
-    private static List<String> maven(String... args) {
+    static List<String> maven(String... args) {
         boolean windows = System.getProperty("os.name").toLowerCase().contains("win");
         List<String> cmd = new ArrayList<>(windows ? List.of("cmd", "/c", "mvn") : List.of("mvn"));
         cmd.addAll(List.of(args));
         return cmd;
     }
 
-    private static String javaBin() {
+    static String javaBin() {
         return Path.of(System.getProperty("java.home"), "bin", "java").toString();
     }
 
-    private static int freePort() throws IOException {
+    static int freePort() throws IOException {
         try (ServerSocket s = new ServerSocket(0)) {
             return s.getLocalPort();
         }
     }
 
-    private static String tail(Path log) {
+    static String tail(Path log) {
         try {
             List<String> lines = Files.readAllLines(log, StandardCharsets.UTF_8);
             return String.join("\n", lines.subList(Math.max(0, lines.size() - 60), lines.size()));
@@ -405,7 +403,7 @@ class GeneratedProjectIT {
         }
     }
 
-    private static void deleteRecursively(Path dir) throws IOException {
+    static void deleteRecursively(Path dir) throws IOException {
         if (!Files.exists(dir))
             return;
         try (var walk = Files.walk(dir)) {

@@ -156,3 +156,28 @@ both the preview and the download.
 - Also observed: the SDK validates arguments against `inputSchema` before the handler runs, so a
   string `"12.50"` for a `number` field is rejected with `isError: true`. The schema is the contract
   the agent sees, so this is the behaviour we want.
+
+## 8. SOAP 1.2 document/literal. DECIDED
+
+- Decision: one `SoapVersion` per service, a `ServiceModel.soapVersion` component in `runtime`
+  (absent in an old `model.json` means SOAP 1.1). The parser reads `soap:` and `soap12:` extensibility
+  elements through one adapter (`core/SoapBinding`), so both versions follow the same document/literal
+  rules and warnings. When a WSDL has both, the first SOAP 1.1 port in document order wins; the rest
+  are reported as `MULTIPLE_PORTS`.
+- Why per service and not per operation: a WSDL port binds one SOAP version, the generated proxy calls
+  one port, and a single value keeps every template branch in one place.
+- Wire format of the generated proxy, from SOAP 1.2 Part 2: `Content-Type: application/soap+xml;
+charset=utf-8; action="<soapAction>"` (no `action` parameter when the soapAction is empty) and no
+  `SOAPAction` header. Faults: `Code/Value` is resolved as a QName against the envelope namespace and
+  `Sender` maps to HTTP 400; `Reason/Text` prefers `xml:lang` `en`/`en-*`, otherwise the first text.
+  The Problem body keeps `faultcode`/`faultstring` for both versions, so REST clients and the
+  generated MCP server need no version switch.
+- mock-bank: `/mock-bank/ws12` serves the same ledger over SOAP 1.2, and `GET /mock-bank/ws12?wsdl`
+  returns a WSDL derived from `bank.wsdl` at startup (only the binding namespace changes). `bank.wsdl`
+  stays SOAP 1.1 because it is the golden fixture. Each path accepts only its own envelope version;
+  the other version gets a SOAP 1.1 `VersionMismatch` fault, as SOAP 1.2 Part 1 Appendix A
+  recommends, so an old client can read it.
+- Evidence: `Soap12ParserTest`, `SoapClient12Test`, `MockBankSoap12Test`, and `GeneratedProject12IT`.
+  The IT generates from the live `/mock-bank/ws12?wsdl`, builds the generated proxy (its generated
+  contract tests run against a SOAP 1.2 stub), and calls GetBalance, Transfer and a `Sender` fault
+  end to end.

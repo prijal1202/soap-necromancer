@@ -3,6 +3,7 @@ package dev.soapnecromancer.core;
 import dev.soapnecromancer.runtime.model.ElementRef;
 import dev.soapnecromancer.runtime.model.OperationModel;
 import dev.soapnecromancer.runtime.model.ServiceModel;
+import dev.soapnecromancer.runtime.model.SoapVersion;
 import org.apache.ws.commons.schema.XmlSchema;
 import org.apache.ws.commons.schema.XmlSchemaCollection;
 import org.apache.ws.commons.schema.resolver.URIResolver;
@@ -21,12 +22,6 @@ import javax.wsdl.Part;
 import javax.wsdl.Port;
 import javax.wsdl.Service;
 import javax.wsdl.WSDLException;
-import javax.wsdl.extensions.soap.SOAPAddress;
-import javax.wsdl.extensions.soap.SOAPBinding;
-import javax.wsdl.extensions.soap.SOAPBody;
-import javax.wsdl.extensions.soap.SOAPHeader;
-import javax.wsdl.extensions.soap.SOAPOperation;
-import javax.wsdl.extensions.soap12.SOAP12Binding;
 import javax.wsdl.factory.WSDLFactory;
 import javax.wsdl.xml.WSDLLocator;
 import javax.wsdl.xml.WSDLReader;
@@ -36,9 +31,9 @@ import java.util.*;
 import java.util.regex.Pattern;
 
 /**
- * Generator entry point: WSDL 1.1 document/literal bytes -> canonical model +
- * warnings.
- * See .kiro/specs/parser/requirements.md.
+ * Generator entry point: WSDL 1.1 document/literal bytes (SOAP 1.1 or 1.2
+ * binding) -> canonical
+ * model + warnings. See .kiro/specs/parser/requirements.md.
  */
 public final class WsdlParser {
     static final String WSDL11 = "http://schemas.xmlsoap.org/wsdl/";
@@ -72,7 +67,10 @@ public final class WsdlParser {
     /**
      * The one port (or, without services, the one binding) the model is built from.
      */
-    private record PortChoice(String serviceName, Binding binding, String endpoint) {
+    private record PortChoice(String serviceName, String portName, SoapBinding binding, String endpoint) {
+        String describe() {
+            return portName + " (SOAP " + binding.version().label() + ")";
+        }
     }
 
     private final Limits limits;
@@ -116,10 +114,11 @@ public final class WsdlParser {
         List<OperationModel> operations = choice == null ? List.of() : operations(choice.binding(), walker, warnings);
         if (operations.isEmpty()) {
             throw new WsdlParseException(
-                    "No supported operations: the generator needs a SOAP 1.1 document/literal binding", warnings);
+                    "No supported operations: the generator needs a SOAP 1.1 or 1.2 document/literal binding",
+                    warnings);
         }
         ServiceModel model = new ServiceModel(choice.serviceName(), def.getTargetNamespace(), choice.endpoint(),
-                operations, walker.types());
+                choice.binding().version(), operations, walker.types());
         checkRequiredCycles(model, warnings);
         return new ParseResult(model, warnings);
     }
@@ -141,12 +140,12 @@ public final class WsdlParser {
      * Requirements 2.2, 2.10, 2.13-2.15. Services and ports are walked in document
      * order: WSDL4J
      * keeps them in hash maps, which would make "the first port" depend on the
-     * names.
+     * names. The first
+     * SOAP 1.1 port wins; without one, the first SOAP 1.2 port.
      */
     private static PortChoice choosePort(Definition def, Element root, List<Warning> warnings) {
         String tns = def.getTargetNamespace();
         List<PortChoice> candidates = new ArrayList<>();
-        List<String> candidateNames = new ArrayList<>();
         for (Element serviceEl : children(root, WSDL11, "service")) {
             String serviceName = serviceEl.getAttribute("name");
             Service service = serviceName.isEmpty() ? null : def.getService(new QName(tns, serviceName));
@@ -155,77 +154,79 @@ public final class WsdlParser {
                 String loc = "service[" + serviceName + "]/port[" + portName + "]";
                 Port port = service == null || portName.isEmpty() ? null : service.getPort(portName);
                 Binding b = port == null ? null : port.getBinding();
-                if (b == null || b.isUndefined()) {
+                Optional<SoapBinding> soap = SoapBinding.of(b);
+                if (soap.isPresent()) {
+                    candidates.add(new PortChoice(serviceName, serviceName + "/" + portName, soap.get(),
+                            soap.get().address(port)));
+                } else if (b == null || b.isUndefined()) {
                     warnings.add(new Warning("UNSUPPORTED_BINDING",
                             "Port has no name or binds an undefined binding; skipped", loc));
-                } else if (isSoap12(b)) {
-                    warnings.add(new Warning("SOAP12_BINDING", "SOAP 1.2 bindings are not supported and are skipped",
-                            loc));
-                } else if (isSoap11(b)) {
-                    candidates.add(new PortChoice(serviceName, b, address(port)));
-                    candidateNames.add(serviceName + "/" + portName);
                 } else {
                     warnings.add(new Warning("UNSUPPORTED_BINDING",
                             "Port uses a non-SOAP binding (for example HTTP or MIME); skipped", loc));
                 }
             }
         }
-        if (!candidates.isEmpty()) {
-            reportSkipped("ports", candidateNames, warnings);
-            PortChoice chosen = candidates.get(0);
-            if (chosen.endpoint() == null || chosen.endpoint().isBlank()) {
-                warnings.add(new Warning("NO_ADDRESS", "Port " + candidateNames.get(0)
-                        + " has no soap:address; the endpoint URL must be configured", "service"));
-                return new PortChoice(chosen.serviceName(), chosen.binding(), null);
-            }
-            return chosen;
+        if (candidates.isEmpty())
+            return fallbackBinding(def, root, warnings);
+
+        PortChoice chosen = preferSoap11(candidates);
+        reportSkipped("ports", chosen, candidates, warnings);
+        if (chosen.endpoint() == null || chosen.endpoint().isBlank()) {
+            warnings.add(new Warning("NO_ADDRESS", "Port " + chosen.portName()
+                    + " has no SOAP address; the endpoint URL must be configured", "service"));
+            return new PortChoice(chosen.serviceName(), chosen.portName(), chosen.binding(), null);
         }
-        return fallbackBinding(def, root, warnings);
+        return chosen;
     }
 
     /**
-     * Requirement 2.15: no usable service; build from the first SOAP 1.1 binding in
+     * Requirement 2.15: no usable service; build from the first SOAP binding in
      * document order.
      */
     private static PortChoice fallbackBinding(Definition def, Element root, List<Warning> warnings) {
-        List<Binding> bindings = new ArrayList<>();
-        List<String> names = new ArrayList<>();
+        String serviceName = def.getQName() != null ? def.getQName().getLocalPart() : "SoapService";
+        List<PortChoice> candidates = new ArrayList<>();
         for (Element bindingEl : children(root, WSDL11, "binding")) {
             String name = bindingEl.getAttribute("name");
             Binding b = name.isEmpty() ? null : def.getBinding(new QName(def.getTargetNamespace(), name));
-            if (b != null && isSoap11(b)) {
-                bindings.add(b);
-                names.add(name);
-            }
+            SoapBinding.of(b).ifPresent(soap -> candidates.add(new PortChoice(serviceName, name, soap, null)));
         }
-        if (bindings.isEmpty())
+        if (candidates.isEmpty())
             return null;
-        reportSkipped("bindings", names, warnings);
+        PortChoice chosen = preferSoap11(candidates);
+        reportSkipped("bindings", chosen, candidates, warnings);
         warnings.add(new Warning("NO_ADDRESS",
-                "No wsdl:service with a SOAP 1.1 port; endpoint URL must be configured", "definitions"));
-        String serviceName = def.getQName() != null ? def.getQName().getLocalPart() : "SoapService";
-        return new PortChoice(serviceName, bindings.get(0), null);
+                "No wsdl:service with a SOAP port; endpoint URL must be configured", "definitions"));
+        return chosen;
     }
 
-    private static void reportSkipped(String what, List<String> names, List<Warning> warnings) {
-        if (names.size() > 1) {
-            warnings.add(new Warning("MULTIPLE_PORTS", "Several SOAP 1.1 " + what + " found; using " + names.get(0)
-                    + ", skipped " + String.join(", ", names.subList(1, names.size())), "definitions"));
-        }
+    private static PortChoice preferSoap11(List<PortChoice> candidates) {
+        return candidates.stream().filter(c -> c.binding().version() == SoapVersion.SOAP_11).findFirst()
+                .orElse(candidates.get(0));
+    }
+
+    private static void reportSkipped(String what, PortChoice chosen, List<PortChoice> candidates,
+            List<Warning> warnings) {
+        if (candidates.size() < 2)
+            return;
+        List<String> skipped = candidates.stream().filter(c -> c != chosen).map(PortChoice::describe).toList();
+        warnings.add(new Warning("MULTIPLE_PORTS", "Several SOAP " + what + " found; using " + chosen.describe()
+                + ", skipped " + String.join(", ", skipped), "definitions"));
     }
 
     // ------------------------------------------------------------------ operations
 
-    private List<OperationModel> operations(Binding binding, SchemaWalker walker, List<Warning> warnings) {
-        List<?> bindingOperations = binding.getBindingOperations();
+    private List<OperationModel> operations(SoapBinding soap, SchemaWalker walker, List<Warning> warnings) {
+        List<?> bindingOperations = soap.binding().getBindingOperations();
         if (bindingOperations.size() > limits.maxOperations()) {
             warnings.add(new Warning("LIMIT_OPERATIONS", bindingOperations.size() + " operations; the limit is "
                     + limits.maxOperations(), "definitions"));
             throw new WsdlParseException("Too many operations (" + bindingOperations.size() + " > "
                     + limits.maxOperations() + "). Split the WSDL or generate a subset.", warnings);
         }
-        String bindingName = local(binding.getQName(), "binding");
-        String style = bindingStyle(binding);
+        String bindingName = local(soap.binding().getQName(), "binding");
+        String style = soap.style();
         Map<String, OperationModel> byName = new LinkedHashMap<>();
         for (Object o : bindingOperations) {
             BindingOperation bop = (BindingOperation) o;
@@ -235,22 +236,22 @@ public final class WsdlParser {
                         "Another operation has the same name (an overload); only the first is kept", loc));
                 continue;
             }
-            OperationModel op = operation(bop, style, loc, walker, warnings);
+            OperationModel op = operation(soap, bop, style, loc, walker, warnings);
             if (op != null)
                 byName.put(op.name(), op);
         }
         return List.copyOf(byName.values());
     }
 
-    private static OperationModel operation(BindingOperation bop, String bindingStyle, String loc,
+    private static OperationModel operation(SoapBinding soap, BindingOperation bop, String bindingStyle, String loc,
             SchemaWalker walker, List<Warning> warnings) {
         if (bop.getName() == null || !OPERATION_NAME.matcher(bop.getName()).matches()) {
             warnings.add(new Warning("UNSUPPORTED_NAME", "Operation names must match [A-Za-z_][A-Za-z0-9_.-]* "
                     + "and be at most 128 characters; operation skipped", loc));
             return null;
         }
-        SOAPOperation soapOp = ext(bop.getExtensibilityElements(), SOAPOperation.class);
-        String style = soapOp != null && soapOp.getStyle() != null ? soapOp.getStyle() : bindingStyle;
+        SoapBinding.OperationInfo info = soap.operation(bop);
+        String style = info.style() != null ? info.style() : bindingStyle;
         if (RPC.equalsIgnoreCase(style)) {
             warnings.add(new Warning("RPC_STYLE", "rpc style is not supported; operation skipped", loc));
             return null;
@@ -267,15 +268,15 @@ public final class WsdlParser {
         }
         List<?> inExt = bop.getBindingInput().getExtensibilityElements();
         List<?> outExt = bop.getBindingOutput().getExtensibilityElements();
-        if (isEncoded(inExt) || isEncoded(outExt)) {
+        if (ENCODED.equalsIgnoreCase(soap.bodyUse(inExt)) || ENCODED.equalsIgnoreCase(soap.bodyUse(outExt))) {
             warnings.add(new Warning("ENCODED_USE", "use=\"encoded\" is not supported; operation skipped", loc));
             return null;
         }
-        if (ext(inExt, SOAPHeader.class) != null || ext(outExt, SOAPHeader.class) != null) {
+        if (!soap.headers(inExt).isEmpty() || !soap.headers(outExt).isEmpty()) {
             warnings.add(new Warning("SOAP_HEADER", "soap:header parts are ignored", loc));
         }
-        QName inEl = bodyElement(op.getInput().getMessage(), inExt, loc + "/input", warnings);
-        QName outEl = bodyElement(op.getOutput().getMessage(), outExt, loc + "/output", warnings);
+        QName inEl = bodyElement(soap, op.getInput().getMessage(), inExt, loc + "/input", warnings);
+        QName outEl = bodyElement(soap, op.getOutput().getMessage(), outExt, loc + "/output", warnings);
         if (inEl == null || outEl == null)
             return null;
 
@@ -284,13 +285,7 @@ public final class WsdlParser {
         if (input == null || output == null)
             return null;
 
-        String action = soapOp == null ? "" : soapOp.getSoapActionURI();
-        return new OperationModel(bop.getName(), action, documentation(op), input, output);
-    }
-
-    private static boolean isEncoded(List<?> extensibility) {
-        SOAPBody body = ext(extensibility, SOAPBody.class);
-        return body != null && ENCODED.equalsIgnoreCase(body.getUse());
+        return new OperationModel(bop.getName(), info.action(), documentation(op), input, output);
     }
 
     /**
@@ -299,12 +294,13 @@ public final class WsdlParser {
      * {@code soap:body parts=}, or else every part not carried by a
      * {@code soap:header}.
      */
-    private static QName bodyElement(Message msg, List<?> bindingExt, String loc, List<Warning> warnings) {
+    private static QName bodyElement(SoapBinding soap, Message msg, List<?> bindingExt, String loc,
+            List<Warning> warnings) {
         if (msg == null || msg.isUndefined()) {
             warnings.add(new Warning("UNSUPPORTED_MESSAGE", "Message is not defined; operation skipped", loc));
             return null;
         }
-        List<Part> parts = bodyParts(msg, bindingExt);
+        List<Part> parts = bodyParts(soap, msg, bindingExt);
         String msgName = local(msg.getQName(), "message");
         if (parts.size() != 1) {
             warnings.add(new Warning("UNSUPPORTED_MESSAGE", "Message " + msgName + " has " + parts.size()
@@ -320,10 +316,9 @@ public final class WsdlParser {
         return part.getElementName();
     }
 
-    private static List<Part> bodyParts(Message msg, List<?> bindingExt) {
+    private static List<Part> bodyParts(SoapBinding soap, Message msg, List<?> bindingExt) {
         Map<?, ?> all = msg.getParts();
-        SOAPBody body = ext(bindingExt, SOAPBody.class);
-        List<?> named = body == null ? null : body.getParts();
+        List<?> named = soap.bodyParts(bindingExt);
         List<Part> result = new ArrayList<>();
         if (named != null) {
             for (Object name : named) {
@@ -333,9 +328,9 @@ public final class WsdlParser {
             return result;
         }
         Set<String> inHeaders = new HashSet<>();
-        for (Object o : bindingExt == null ? List.of() : bindingExt) {
-            if (o instanceof SOAPHeader h && Objects.equals(h.getMessage(), msg.getQName()) && h.getPart() != null)
-                inHeaders.add(h.getPart());
+        for (SoapBinding.Header h : soap.headers(bindingExt)) {
+            if (Objects.equals(h.message(), msg.getQName()) && h.part() != null)
+                inHeaders.add(h.part());
         }
         List<Part> ordered = new ArrayList<>();
         for (Object o : msg.getOrderedParts(null)) {
@@ -580,24 +575,6 @@ public final class WsdlParser {
     // ------------------------------------------------------------------ small
     // helpers
 
-    private static boolean isSoap11(Binding b) {
-        return ext(b.getExtensibilityElements(), SOAPBinding.class) != null;
-    }
-
-    private static boolean isSoap12(Binding b) {
-        return ext(b.getExtensibilityElements(), SOAP12Binding.class) != null;
-    }
-
-    private static String bindingStyle(Binding b) {
-        SOAPBinding sb = ext(b.getExtensibilityElements(), SOAPBinding.class);
-        return sb == null || sb.getStyle() == null ? "document" : sb.getStyle();
-    }
-
-    private static String address(Port port) {
-        SOAPAddress a = ext(port.getExtensibilityElements(), SOAPAddress.class);
-        return a == null ? null : a.getLocationURI();
-    }
-
     /** WSDL4J leaves the QName null when the name attribute is missing. */
     private static String local(QName name, String fallback) {
         return name == null ? fallback : name.getLocalPart();
@@ -612,16 +589,6 @@ public final class WsdlParser {
         if (msg.length() > 200)
             msg = msg.substring(0, 200) + "...";
         return e.getClass().getSimpleName() + (msg.isEmpty() ? "" : " (" + msg + ")");
-    }
-
-    private static <T> T ext(List<?> elements, Class<T> type) {
-        if (elements == null)
-            return null;
-        for (Object o : elements) {
-            if (type.isInstance(o))
-                return type.cast(o);
-        }
-        return null;
     }
 
     /**

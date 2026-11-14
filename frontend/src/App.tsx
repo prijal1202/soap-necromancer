@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { generate, NetworkError, sampleWsdl, type Problem } from './api.ts'
+import { generate, NetworkError, SAMPLES, sampleWsdl, type Problem } from './api.ts'
 import { formatBytes, groupArtifacts, readReport, readZip, type ArtifactGroup, type Report } from './artifacts.ts'
 import { ArtifactTabs } from './components/ArtifactTabs.tsx'
 import { UploadPanel } from './components/UploadPanel.tsx'
@@ -100,7 +100,7 @@ export default function App() {
         <p className="tagline">Resurrect legacy SOAP services for REST clients and AI agents.</p>
         <p className="lede">
           Upload a WSDL. Get back one zip with an OpenAPI 3.0 spec, a <strong>generated proxy</strong> (Spring Boot,
-          JSON in, SOAP 1.1 out), a <strong>generated MCP server</strong> that gives agents like Kiro one tool per
+          JSON in, SOAP 1.1 or 1.2 out), a <strong>generated MCP server</strong> that gives agents like Kiro one tool per
           operation, and the tests that prove the <span className="nowrap">JSON&lt;-&gt;XML</span> mapping is lossless. Nothing is stored on the server.
         </p>
       </header>
@@ -109,7 +109,9 @@ export default function App() {
         <UploadPanel
           busy={busy}
           onFile={(file) => void resurrect(async () => file, file.name)}
-          onSample={() => void resurrect(sampleWsdl, 'bank.wsdl (sample)')}
+          onSample={(version) =>
+            void resurrect(() => sampleWsdl(version), `${SAMPLES[version].filename} (sample)`)
+          }
         />
 
         <section className="panel results" aria-labelledby="results-title" aria-busy={busy}>
@@ -136,8 +138,8 @@ export default function App() {
 
       <footer>
         <p>
-          Supported: SOAP 1.1 over HTTP, <code>document/literal</code>, the core XSD types. SOAP 1.2, rpc/encoded and
-          WS-Security are reported as warnings. Uploads up to 2 MB.
+          Supported: SOAP 1.1 and 1.2 over HTTP, <code>document/literal</code>, the core XSD types. rpc/encoded,
+          WS-Security and WS-Addressing are reported as warnings. Uploads up to 2 MB.
         </p>
         <p>
           The sample bank is shared by every visitor and resets to its seeded accounts every 30 minutes.{' '}

@@ -23,8 +23,9 @@ and produces, as one in-memory zip:
 
 ## Scope
 
-- In: SOAP 1.1 over HTTP, document/literal, no auth.
-- Unsupported (shown as warnings in the UI): SOAP 1.2, rpc/encoded, WS-Security.
+- In: SOAP 1.1 and SOAP 1.2 over HTTP, document/literal, no auth. When a WSDL offers both, the
+  SOAP 1.1 port is used.
+- Unsupported (shown as warnings in the UI): rpc/encoded, WS-Security, WS-Addressing.
 - XSD core subset: simple/complex types, sequences, minOccurs/maxOccurs, enums,
   string/int/decimal/boolean/date/dateTime, one target namespace, simple imports.
   Anything else yields a warning with a location.

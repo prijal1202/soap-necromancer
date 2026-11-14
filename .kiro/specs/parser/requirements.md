@@ -36,20 +36,20 @@ every generator exposes exactly the legacy service's capabilities.
 #### Acceptance Criteria
 
 1. WHEN the root element is not `{http://schemas.xmlsoap.org/wsdl/}definitions` THEN the parser SHALL return a fatal error (this covers WSDL 2.0).
-2. WHEN a port uses a SOAP 1.1 binding THEN the parser SHALL use it and record the `soap:address` location as the endpoint URL.
-3. WHEN a binding is SOAP 1.2 THEN the parser SHALL skip it and emit `SOAP12_BINDING`.
+2. WHEN a port uses a SOAP 1.1 or SOAP 1.2 binding THEN the parser SHALL use it and record the `soap:address` or `soap12:address` location as the endpoint URL.
+3. The parser SHALL record the chosen binding's SOAP version (`SOAP_11` or `SOAP_12`) in the model. SOAP 1.2 bindings SHALL follow every criterion below exactly like SOAP 1.1 ones, with the `soap12:` elements in place of the `soap:` ones.
 4. WHEN an operation is `rpc` style THEN the parser SHALL skip it and emit `RPC_STYLE`.
 5. WHEN an operation body is `use="encoded"` THEN the parser SHALL skip it and emit `ENCODED_USE`.
 6. WHEN an input or output message does not have exactly one body part bound to an element THEN the parser SHALL skip the operation and emit `UNSUPPORTED_MESSAGE`. Body parts are those listed by `soap:body parts=`; without `parts=`, every part not bound by a `soap:header` of the same message, or every part when that would leave none (WSDL 1.1 section 3.5).
 7. WHEN an operation has no output (one-way) THEN the parser SHALL skip it and emit `ONE_WAY_OPERATION`.
-8. WHEN an operation declares `soap:header` THEN the parser SHALL keep the operation, ignore the header and emit `SOAP_HEADER`.
+8. WHEN an operation declares `soap:header` (or `soap12:header`) THEN the parser SHALL keep the operation, ignore the header and emit `SOAP_HEADER`.
 9. WHEN the document contains WS-Policy or WS-Security elements THEN the parser SHALL emit `WS_SECURITY` and keep the operations.
-10. WHEN more than one SOAP 1.1 port exists THEN the parser SHALL use the first in document order and emit `MULTIPLE_PORTS` naming the chosen and the skipped ports.
+10. WHEN more than one SOAP port exists THEN the parser SHALL use the first SOAP 1.1 port in document order, or, without one, the first SOAP 1.2 port, and emit `MULTIPLE_PORTS` naming the chosen and the skipped ports. (Services such as .NET ASMX publish both versions for the same operations; SOAP 1.1 is the most widely interoperable.)
 11. WHEN no usable operation remains THEN the parser SHALL return a fatal error that lists the warnings.
-12. The parser SHALL record each operation's name, soapAction, documentation, input element and output element.
+12. The parser SHALL record each operation's name, soapAction, documentation, input element and output element, and the service's SOAP version.
 13. WHEN a port's binding is undefined or is not a SOAP binding (for example HTTP or MIME) THEN the parser SHALL skip the port and emit `UNSUPPORTED_BINDING`.
 14. WHEN the chosen port has no address THEN the parser SHALL emit `NO_ADDRESS` (the endpoint must then be configured).
-15. WHEN no `wsdl:service` has a usable port THEN the parser SHALL use the first SOAP 1.1 binding in document order, emit `NO_ADDRESS`, and emit `MULTIPLE_PORTS` if other SOAP 1.1 bindings are skipped.
+15. WHEN no `wsdl:service` has a usable port THEN the parser SHALL use the first SOAP binding in document order (SOAP 1.1 first, as in criterion 10), emit `NO_ADDRESS`, and emit `MULTIPLE_PORTS` if other SOAP bindings are skipped.
 16. WHEN a binding has two operations with the same name (overloads) THEN the parser SHALL keep the first and emit `DUPLICATE_OPERATION`.
 17. WHEN an operation name does not match `[A-Za-z_][A-Za-z0-9_.-]*` or is longer than 128 characters THEN the parser SHALL skip the operation and emit `UNSUPPORTED_NAME`. Operation names become URL paths, MCP tool names and file names.
 

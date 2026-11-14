@@ -11,7 +11,7 @@
 ## Canonical model
 
 ```
-ServiceModel(name, targetNamespace, endpointUrl, operations[], types{id -> TypeModel})
+ServiceModel(name, targetNamespace, endpointUrl, soapVersion: SOAP_11|SOAP_12, operations[], types{id -> TypeModel})
 OperationModel(name, soapAction, documentation, input: ElementRef, output: ElementRef)
 ElementRef(namespace, localName, typeId)            top-level element of a message part
 TypeModel(id, kind: COMPLEX|SIMPLE, base: BuiltIn?, enumValues[], fields[])
@@ -39,9 +39,12 @@ before recursing, so recursive types terminate.
 4. XmlSchema: every inline `xs:schema` element is read into one `XmlSchemaCollection` with a
    resolver that never fetches. It returns an empty schema and records `EXTERNAL_IMPORT`.
 5. Pick one port, walking `wsdl:service` / `wsdl:port` in document order (WSDL4J's own maps are
-   hash-ordered): the first SOAP 1.1 port wins; the others are reported. Without one, fall back to
-   the first SOAP 1.1 binding in document order, `endpointUrl = null` (`NO_ADDRESS`). Exactly one
-   binding is used, so operations are never merged across bindings.
+   hash-ordered): the first SOAP 1.1 port wins, else the first SOAP 1.2 port; the others are
+   reported. Without one, fall back to the first SOAP binding in document order (1.1 first),
+   `endpointUrl = null` (`NO_ADDRESS`). Exactly one binding is used, so operations are never merged
+   across bindings, and the model has one SOAP version.
+   `SoapBinding` (one record per chosen binding) reads the `soap:` or the `soap12:` extensibility
+   elements according to the binding's version, so the operation checks in step 6 exist once.
 6. For each binding operation: name, duplicate, style, use, body parts, header and output checks,
    then resolve input and output elements to types.
 7. Fatal (`WsdlParseException`) when zero operations remain. Any other exception from WSDL4J or
@@ -62,4 +65,6 @@ to HTTP 422 with a JSON body.
 - Golden test: `bank.wsdl` -> `bank.model.json` (JSON tree equality), zero warnings.
 - One negative fixture per warning code group: soap12, rpc/encoded, choice/attribute/any,
   derivation, ws-security, external import, unknown built-in, one-way, multi-part.
-- Fatal: not XML, DOCTYPE, WSDL 2.0, no SOAP 1.1 binding.
+- Fatal: not XML, DOCTYPE, WSDL 2.0, no SOAP binding.
+- SOAP 1.2: the structure tests run for both versions (`Wsdls.Builder.soap12()` swaps the binding
+  namespace), plus a dual-port test for the version preference.

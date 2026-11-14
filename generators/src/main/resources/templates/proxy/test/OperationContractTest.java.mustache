@@ -1,5 +1,6 @@
 package {{package}};
 
+import dev.soapnecromancer.runtime.SoapClient;
 import dev.soapnecromancer.runtime.model.OperationModel;
 import org.junit.jupiter.api.Test;
 import org.w3c.dom.Element;
@@ -26,6 +27,15 @@ class {{className}} extends ContractTestSupport {
         return model.operation(OPERATION);
     }
 
+    /** What the generated proxy must send as the action: the same quoting as the SOAP client. */
+    private static String expectedAction(OperationModel op) {
+{{#soap12}}
+        // SOAP 1.2: no action parameter at all when the WSDL gives no soapAction.
+        if (op.soapAction().isEmpty()) return null;
+{{/soap12}}
+        return SoapClient.quotedHeaderValue(op.soapAction());
+    }
+
     @Test
     void validRequestIsSentAsSoapAndTheResponseComesBackAsJson() throws Exception {
         OperationModel op = op();
@@ -40,8 +50,8 @@ class {{className}} extends ContractTestSupport {
                     .extract().asByteArray();
 
             assertThat(canonical(op.output(), parse(body))).as("response, seed %d", seed).isEqualTo(response);
-            assertThat(STUB.last().soapAction()).isEqualTo("\"" + op.soapAction() + "\"");
-            assertThat(STUB.last().contentType()).startsWith("text/xml");
+            assertThat(STUB.last().action()).as("SOAP action").isEqualTo(expectedAction(op));
+            assertThat(STUB.last().contentType()).startsWith(StubSoapServer.MEDIA_TYPE);
             Element payload = STUB.lastPayload();
             assertThat(payload.getLocalName()).isEqualTo(op.input().localName());
             assertThat(converter.toJson(op.input(), payload)).as("request, seed %d", seed)
@@ -63,22 +73,25 @@ class {{className}} extends ContractTestSupport {
     }
 {{/complexInput}}
 
+    /** A {{clientFaultName}} fault: the caller's request was rejected (Requirement 2.6). */
     @Test
     void soapClientFaultIs400WithTheFault() throws Exception {
-        STUB.reply(500, StubSoapServer.fault("soap:Client", "Rejected by the backend"));
+        STUB.reply(StubSoapServer.CLIENT_FAULT_STATUS,
+                StubSoapServer.fault(StubSoapServer.CLIENT_FAULT, "Rejected by the backend"));
         client().body(json(sample(op().input().typeId(), 2)))
                 .when().post(PATH)
                 .then().statusCode(400).contentType(startsWith("application/problem+json"))
-                .body("faultcode", equalTo("soap:Client"))
+                .body("faultcode", equalTo(StubSoapServer.CLIENT_FAULT))
                 .body("faultstring", equalTo("Rejected by the backend"));
     }
 
+    /** A {{serverFaultName}} fault: the backend failed. */
     @Test
     void soapServerFaultIs502() throws Exception {
-        STUB.reply(500, StubSoapServer.fault("soap:Server", "Backend is down"));
+        STUB.reply(500, StubSoapServer.fault(StubSoapServer.SERVER_FAULT, "Backend is down"));
         client().body(json(sample(op().input().typeId(), 3)))
                 .when().post(PATH)
-                .then().statusCode(502).body("faultcode", equalTo("soap:Server"));
+                .then().statusCode(502).body("faultcode", equalTo(StubSoapServer.SERVER_FAULT));
     }
 
     @Test

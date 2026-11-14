@@ -38,13 +38,22 @@ export async function generate(wsdl: File): Promise<GenerateOutcome> {
   }
 }
 
+export type SoapVersion = '1.1' | '1.2'
+
+/** Where each sample lives; the SOAP 1.2 one points at the mock bank's SOAP 1.2 endpoint. */
+export const SAMPLES: Record<SoapVersion, { url: string; filename: string }> = {
+  '1.1': { url: '/api/sample-wsdl', filename: 'bank.wsdl' },
+  '1.2': { url: '/api/sample-wsdl?soap=1.2', filename: 'bank-soap12.wsdl' },
+}
+
 /** The bank WSDL, with its SOAP address pointing at this deployment's mock bank. */
-export async function sampleWsdl(): Promise<File> {
-  const res = await send('/api/sample-wsdl', { headers: { Accept: 'text/xml' } })
+export async function sampleWsdl(version: SoapVersion): Promise<File> {
+  const { url, filename } = SAMPLES[version]
+  const res = await send(url, { headers: { Accept: 'text/xml' } })
   if (!res.ok) {
     throw new NetworkError(`The sample WSDL could not be loaded (HTTP ${res.status}).`)
   }
-  return new File([await res.text()], 'bank.wsdl', { type: 'text/xml' })
+  return new File([await res.text()], filename, { type: 'text/xml' })
 }
 
 async function send(url: string, init: RequestInit): Promise<Response> {

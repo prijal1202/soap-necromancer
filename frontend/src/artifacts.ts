@@ -53,7 +53,7 @@ const GROUPS: { id: string; label: string; summary: string; matches: (path: stri
   {
     id: 'proxy',
     label: 'Generated proxy',
-    summary: 'Spring Boot 3 REST service: JSON in, SOAP 1.1 out. Includes the converter runtime.',
+    summary: 'Spring Boot 3 REST service: JSON in, SOAP 1.1 or 1.2 out, as the WSDL binding says. Includes the converter runtime.',
     matches: (p) => p.startsWith('proxy/') && !p.startsWith(TEST_ROOT),
   },
   {

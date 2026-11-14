@@ -20,6 +20,15 @@ public class MockBankFault extends RuntimeException {
                 case VERSION_MISMATCH -> "soap:VersionMismatch";
             };
         }
+
+        /** The SOAP 1.2 Code/Value, using the envelope's {@code soap} prefix. */
+        String soap12() {
+            return switch (this) {
+                case SENDER -> "soap:Sender";
+                case RECEIVER -> "soap:Receiver";
+                case VERSION_MISMATCH -> "soap:VersionMismatch";
+            };
+        }
     }
 
     private final Code code;

@@ -206,13 +206,68 @@ class GenerateApiTest {
 
     @Test
     void unusableWsdlIs422WithItsWarnings() throws Exception {
-        String soap12Only = new String(sampleWsdl(), StandardCharsets.UTF_8)
-                .replace("http://schemas.xmlsoap.org/wsdl/soap/", "http://schemas.xmlsoap.org/wsdl/soap12/");
-        HttpResponse<byte[]> r = postRaw(soap12Only.getBytes(StandardCharsets.UTF_8), "text/xml");
+        String rpcOnly = new String(sampleWsdl(), StandardCharsets.UTF_8)
+                .replace("style=\"document\"", "style=\"rpc\"");
+        HttpResponse<byte[]> r = postRaw(rpcOnly.getBytes(StandardCharsets.UTF_8), "text/xml");
         assertThat(r.statusCode()).isEqualTo(422);
         JsonNode p = problem(r);
         assertThat(p.get("title").asText()).isEqualTo("WSDL cannot be resurrected");
-        assertThat(p.get("warnings").toString()).contains("SOAP12_BINDING");
+        assertThat(p.get("warnings").toString()).contains("RPC_STYLE");
+    }
+
+    // ------------------------------------------------------------------ SOAP 1.2
+
+    private byte[] sampleWsdl12() throws Exception {
+        HttpResponse<byte[]> r = HTTP.send(HttpRequest.newBuilder(URI.create(url("/api/sample-wsdl?soap=1.2")))
+                .build(), HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(r.statusCode()).isEqualTo(200);
+        assertThat(r.headers().firstValue("Content-Disposition"))
+                .hasValueSatisfying(v -> assertThat(v).contains("bank-soap12.wsdl"));
+        return r.body();
+    }
+
+    /**
+     * The SOAP 1.2 sample generates a SOAP 1.2 generated proxy aimed at this
+     * app's SOAP 1.2 mock-bank.
+     */
+    @Test
+    void soap12SampleGeneratesASoap12Project() throws Exception {
+        String wsdl = new String(sampleWsdl12(), StandardCharsets.UTF_8);
+        assertThat(wsdl).contains("http://schemas.xmlsoap.org/wsdl/soap12/")
+                .contains("location=\"http://127.0.0.1:" + port + "/mock-bank/ws12\"");
+
+        HttpResponse<byte[]> r = postRaw(wsdl.getBytes(StandardCharsets.UTF_8), "text/xml");
+        assertThat(r.statusCode()).isEqualTo(200);
+        assertThat(r.headers().firstValue("X-Generator-Warnings")).hasValue("0");
+        Map<String, byte[]> files = unzip(r.body());
+        assertThat(json.readTree(files.get("model.json")).get("soapVersion").asText()).isEqualTo("SOAP_12");
+        assertThat(json.readTree(files.get("generator-report.json")).get("soapVersion").asText()).isEqualTo("1.2");
+        assertThat(new String(files.get("proxy/src/main/resources/application.properties"), StandardCharsets.UTF_8))
+                .contains("soap.endpoint=${SOAP_ENDPOINT:http://127.0.0.1:" + port + "/mock-bank/ws12}");
+    }
+
+    @Test
+    void mockBankAnswersSoap12InTheSameJvm() throws Exception {
+        String envelope = """
+                <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:b="urn:example:bank:v1">
+                  <soap:Body><b:GetBalanceRequest><b:accountId>ACC-1001</b:accountId></b:GetBalanceRequest></soap:Body>
+                </soap:Envelope>""";
+        HttpResponse<String> r = HTTP.send(HttpRequest.newBuilder(URI.create(url("/mock-bank/ws12")))
+                .header("Content-Type",
+                        "application/soap+xml; charset=utf-8; action=\"urn:example:bank:v1:GetBalance\"")
+                .POST(HttpRequest.BodyPublishers.ofString(envelope)).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(r.statusCode()).isEqualTo(200);
+        assertThat(r.headers().firstValue("Content-Type"))
+                .hasValueSatisfying(v -> assertThat(v).startsWith("application/soap+xml"));
+        assertThat(r.body()).contains("GetBalanceResponse").contains("ACC-1001");
+    }
+
+    @Test
+    void unknownSampleVersionIs400() throws Exception {
+        HttpResponse<byte[]> r = HTTP.send(HttpRequest.newBuilder(URI.create(url("/api/sample-wsdl?soap=2.0")))
+                .build(), HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(r.statusCode()).isEqualTo(400);
+        assertThat(problem(r).get("detail").asText()).isEqualTo("soap must be 1.1 or 1.2");
     }
 
     // ------------------------------------------------------------------ generation

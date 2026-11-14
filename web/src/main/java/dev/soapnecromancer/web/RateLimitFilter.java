@@ -1,6 +1,7 @@
 package dev.soapnecromancer.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.soapnecromancer.mockbank.MockBankEndpoint;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
@@ -19,13 +20,19 @@ import java.io.IOException;
 import java.time.Duration;
 
 /**
- * Per-client rate limits for the endpoints that cost CPU on the 0.1 CPU host: {@code POST
- * /api/generate} and {@code POST /mock-bank/ws}. Over the limit: 429 problem+json with
- * {@code Retry-After}. {@code /mock-bank/reset} has its own global cooldown.
+ * Per-client rate limits for the endpoints that cost CPU on the 0.1 CPU host:
+ * {@code POST /api/generate}, and {@code POST /mock-bank/ws} plus
+ * {@code /mock-bank/ws12} (one shared budget per client). Over the limit: 429
+ * problem+json with {@code Retry-After}. {@code /mock-bank/reset} has its own
+ * global cooldown.
  *
- * <p>The client key is the <em>last</em> {@code X-Forwarded-For} entry, the hop Render's proxy
- * appends; earlier entries come from the client and can be forged. Without the header (local runs)
- * it is the socket address. If the proxy chain ever made every request share one key, the limit
+ * <p>
+ * The client key is the <em>last</em> {@code X-Forwarded-For} entry, the hop
+ * Render's proxy
+ * appends; earlier entries come from the client and can be forged. Without the
+ * header (local runs)
+ * it is the socket address. If the proxy chain ever made every request share
+ * one key, the limit
  * degrades to a global one, which the defaults keep usable for a demo.
  */
 @Component
@@ -60,13 +67,14 @@ class RateLimitFilter extends OncePerRequestFilter {
             return null;
         return switch (request.getRequestURI()) {
             case "/api/generate" -> generate;
-            case "/mock-bank/ws" -> soap;
+            case MockBankEndpoint.PATH, MockBankEndpoint.PATH_12 -> soap;
             default -> null;
         };
     }
 
     /**
-     * Reads the header from the innermost request: Spring's ForwardedHeaderFilter may already have
+     * Reads the header from the innermost request: Spring's ForwardedHeaderFilter
+     * may already have
      * wrapped this one and hidden X-Forwarded-*.
      */
     static String clientKey(HttpServletRequest request) {

@@ -1,6 +1,8 @@
 package dev.soapnecromancer.runtime;
 
 import dev.soapnecromancer.runtime.model.OperationModel;
+import dev.soapnecromancer.runtime.model.ServiceModel;
+import dev.soapnecromancer.runtime.model.SoapVersion;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -29,23 +31,27 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * SOAP 1.1 document/literal client used by every generated proxy. JDK only
- * (HttpClient + DOM).
- * Generators spec, Requirements 2.4, 2.6, 2.9-2.12.
+ * SOAP 1.1 and 1.2 document/literal client used by every generated proxy. JDK
+ * only (HttpClient +
+ * DOM). The version is the model's ({@link ServiceModel#soapVersion()}).
+ * Generators spec,
+ * Requirements 2.4, 2.6, 2.9-2.12.
  *
  * <p>
  * Request JSON errors surface as {@link ConversionException} before anything is
  * sent. A SOAP
  * Fault becomes {@link SoapFaultException}; every other failure becomes
- * {@link SoapTransportException}.
- * Every call is bounded in time (the read timeout covers the whole response,
- * body included) and in
- * size ({@code maxResponseBytes}), whatever the backend does.
+ * {@link SoapTransportException}. Every call is bounded in time (the read
+ * timeout covers the whole
+ * response, body included) and in size ({@code maxResponseBytes}), whatever the
+ * backend does.
  */
 public final class SoapClient {
-    public static final String SOAP_ENV = "http://schemas.xmlsoap.org/soap/envelope/";
+    /** The SOAP 1.1 envelope namespace. */
+    public static final String SOAP_ENV = SoapVersion.SOAP_11.envelopeNamespace();
     public static final int DEFAULT_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 
+    private final SoapVersion version;
     private final JsonXmlConverter converter;
     private final URI endpoint;
     private final Duration readTimeout;
@@ -59,6 +65,7 @@ public final class SoapClient {
     public SoapClient(JsonXmlConverter converter, URI endpoint, Duration connectTimeout, Duration readTimeout,
             int maxResponseBytes) {
         this.converter = Objects.requireNonNull(converter);
+        this.version = converter.model().soapVersion();
         this.endpoint = Objects.requireNonNull(endpoint);
         String scheme = endpoint.getScheme() == null ? "" : endpoint.getScheme().toLowerCase(Locale.ROOT);
         if ((!scheme.equals("http") && !scheme.equals("https")) || endpoint.getHost() == null) {
@@ -79,27 +86,39 @@ public final class SoapClient {
         return endpoint;
     }
 
+    public SoapVersion version() {
+        return version;
+    }
+
     /**
      * Converts {@code json}, calls the operation, and returns the response payload
      * as canonical JSON.
      */
     public Object call(OperationModel op, Object json) {
         String payload = converter.toXml(op.input(), json);
-        String envelope = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soap:Envelope xmlns:soap=\"" + SOAP_ENV
-                + "\"><soap:Body>" + payload + "</soap:Body></soap:Envelope>";
-        HttpRequest request = HttpRequest.newBuilder(endpoint)
+        String envelope = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soap:Envelope xmlns:soap=\""
+                + version.envelopeNamespace() + "\"><soap:Body>" + payload + "</soap:Body></soap:Envelope>";
+        HttpRequest.Builder request = HttpRequest.newBuilder(endpoint)
                 .timeout(readTimeout)
-                .header("Content-Type", "text/xml; charset=utf-8")
-                .header("SOAPAction", quotedHeaderValue(op.soapAction()))
-                .POST(HttpRequest.BodyPublishers.ofString(envelope, StandardCharsets.UTF_8))
-                .build();
+                .POST(HttpRequest.BodyPublishers.ofString(envelope, StandardCharsets.UTF_8));
+        switch (version) {
+            case SOAP_11 -> request.header("Content-Type", "text/xml; charset=utf-8")
+                    .header("SOAPAction", quotedHeaderValue(op.soapAction()));
+            // SOAP 1.2 HTTP binding: the action travels as a media-type parameter, not a
+            // header.
+            case SOAP_12 -> request.header("Content-Type", "application/soap+xml; charset=utf-8"
+                    + (op.soapAction().isEmpty() ? "" : "; action=" + quotedHeaderValue(op.soapAction())));
+        }
 
-        HttpResponse<byte[]> response = send(request);
+        HttpResponse<byte[]> response = send(request.build());
         int status = response.statusCode();
         Element payloadElement = bodyPayload(response.body(), charsetOf(response), status);
-        if (payloadElement != null && SOAP_ENV.equals(payloadElement.getNamespaceURI())
+        if (payloadElement != null && version.envelopeNamespace().equals(payloadElement.getNamespaceURI())
                 && "Fault".equals(payloadElement.getLocalName())) {
-            throw fault(payloadElement);
+            throw switch (version) {
+                case SOAP_11 -> fault11(payloadElement);
+                case SOAP_12 -> fault12(payloadElement);
+            };
         }
         if (status != 200) {
             throw new SoapTransportException(SoapTransportException.Kind.BAD_RESPONSE,
@@ -250,7 +269,7 @@ public final class SoapClient {
         return null;
     }
 
-    private static Element bodyPayload(byte[] bytes, Charset charset, int status) {
+    private Element bodyPayload(byte[] bytes, Charset charset, int status) {
         Document doc;
         try {
             doc = RuntimeXml.parse(bytes, charset);
@@ -259,11 +278,17 @@ public final class SoapClient {
                     "SOAP endpoint returned HTTP " + status + " with a body that is not valid XML");
         }
         Element env = doc.getDocumentElement();
-        if (!SOAP_ENV.equals(env.getNamespaceURI()) || !"Envelope".equals(env.getLocalName())) {
-            throw new SoapTransportException(SoapTransportException.Kind.BAD_RESPONSE,
-                    "SOAP endpoint returned HTTP " + status + " without a SOAP 1.1 Envelope");
+        String ns = version.envelopeNamespace();
+        if (!"Envelope".equals(env.getLocalName()) || !ns.equals(env.getNamespaceURI())) {
+            SoapVersion other = "Envelope".equals(env.getLocalName())
+                    ? SoapVersion.ofEnvelopeNamespace(env.getNamespaceURI())
+                    : null;
+            throw new SoapTransportException(SoapTransportException.Kind.BAD_RESPONSE, other != null
+                    ? "SOAP endpoint answered with a SOAP " + other.label() + " envelope; the WSDL binding is SOAP "
+                            + version.label()
+                    : "SOAP endpoint returned HTTP " + status + " without a SOAP " + version.label() + " Envelope");
         }
-        Element body = child(env, SOAP_ENV, "Body");
+        Element body = child(env, ns, "Body");
         if (body == null) {
             throw new SoapTransportException(SoapTransportException.Kind.BAD_RESPONSE,
                     "SOAP response has no soap:Body");
@@ -282,24 +307,67 @@ public final class SoapClient {
      * unprefixed
      * {@code Client} is accepted too, because sloppy servers send it.
      */
-    private static SoapFaultException fault(Element fault) {
+    private static SoapFaultException fault11(Element fault) {
         Element codeEl = childByLocalName(fault, "faultcode");
-        String code = codeEl == null ? "" : codeEl.getTextContent().strip();
-        String faultString = textOf(childByLocalName(fault, "faultstring"));
+        String code = textOf(codeEl);
+        String local = code.substring(code.indexOf(':') + 1);
+        boolean client = inEnvelopeNamespace(codeEl, code, SOAP_ENV)
+                && (local.equals("Client") || local.startsWith("Client."));
+        return new SoapFaultException(code, textOf(childByLocalName(fault, "faultstring")), client);
+    }
+
+    /**
+     * SOAP 1.2 (part 1, 5.4): {@code Code/Value} is one of the envelope namespace's
+     * Sender,
+     * Receiver, MustUnderstand, VersionMismatch or DataEncodingUnknown; only Sender
+     * blames the
+     * caller. {@code Reason} holds one {@code Text} per language: English is
+     * preferred.
+     */
+    private static SoapFaultException fault12(Element fault) {
+        String ns = SoapVersion.SOAP_12.envelopeNamespace();
+        Element code = child(fault, ns, "Code");
+        Element valueEl = code == null ? null : child(code, ns, "Value");
+        String value = textOf(valueEl);
+        boolean client = inEnvelopeNamespace(valueEl, value, ns)
+                && value.substring(value.indexOf(':') + 1).equals("Sender");
+        return new SoapFaultException(value, reason(child(fault, ns, "Reason"), ns), client);
+    }
+
+    private static String reason(Element reason, String ns) {
+        if (reason == null)
+            return "";
+        Element first = null;
+        for (Node n = reason.getFirstChild(); n != null; n = n.getNextSibling()) {
+            if (n instanceof Element e && ns.equals(e.getNamespaceURI()) && "Text".equals(e.getLocalName())) {
+                String lang = e.getAttributeNS(javax.xml.XMLConstants.XML_NS_URI, "lang").toLowerCase(Locale.ROOT);
+                if (lang.equals("en") || lang.startsWith("en-"))
+                    return textOf(e);
+                if (first == null)
+                    first = e;
+            }
+        }
+        return textOf(first);
+    }
+
+    /**
+     * A fault code is a QName. It is the envelope's own code when its prefix
+     * resolves to the
+     * envelope namespace, or when it has no prefix at all (sloppy servers send bare
+     * {@code Client}).
+     */
+    private static boolean inEnvelopeNamespace(Element codeEl, String code, String envelopeNs) {
         int colon = code.indexOf(':');
-        String prefix = colon < 0 ? null : code.substring(0, colon);
-        String local = code.substring(colon + 1);
-        String ns = codeEl == null || prefix == null ? null : codeEl.lookupNamespaceURI(prefix);
-        boolean inSoapNamespace = prefix == null || SOAP_ENV.equals(ns);
-        boolean client = inSoapNamespace && (local.equals("Client") || local.startsWith("Client."));
-        return new SoapFaultException(code, faultString, client);
+        if (colon < 0)
+            return true;
+        return codeEl != null && envelopeNs.equals(codeEl.lookupNamespaceURI(code.substring(0, colon)));
     }
 
     /**
      * SOAPAction is a quoted string; the value comes from the WSDL, so it is
      * escaped and kept on one line.
      */
-    static String quotedHeaderValue(String value) {
+    public static String quotedHeaderValue(String value) {
         StringBuilder b = new StringBuilder(value.length() + 2).append('"');
         for (char c : value.toCharArray()) {
             if (c == '"' || c == '\\')

@@ -22,11 +22,10 @@ import java.io.IOException;
 import java.io.StringWriter;
 
 /**
- * Minimal SOAP 1.1 envelope handling on the JDK DOM. Kept separate from the
- * generator on purpose.
+ * Minimal SOAP 1.1 and 1.2 envelope handling on the JDK DOM. Kept separate from
+ * the generator on purpose.
  */
 final class SoapXml {
-    static final String SOAP_ENV = "http://schemas.xmlsoap.org/soap/envelope/";
     static final String BANK_NS = "urn:example:bank:v1";
 
     /**
@@ -92,8 +91,11 @@ final class SoapXml {
         }
     }
 
-    /** Returns the first element child of soap:Body. */
-    static Element bodyPayload(byte[] envelope) {
+    /**
+     * Returns the first element child of soap:Body. Any envelope other than the
+     * {@code expected} version is a VersionMismatch fault.
+     */
+    static Element bodyPayload(byte[] envelope, SoapVersion expected) {
         Document doc;
         try {
             doc = newBuilder().parse(new ByteArrayInputStream(envelope));
@@ -101,10 +103,11 @@ final class SoapXml {
             throw MockBankFault.sender("Malformed SOAP envelope");
         }
         Element env = doc.getDocumentElement();
-        if (!SOAP_ENV.equals(env.getNamespaceURI()) || !"Envelope".equals(env.getLocalName())) {
-            throw MockBankFault.versionMismatch("Expected a SOAP 1.1 Envelope");
+        String ns = expected.envelopeNamespace();
+        if (!ns.equals(env.getNamespaceURI()) || !"Envelope".equals(env.getLocalName())) {
+            throw MockBankFault.versionMismatch("Expected a SOAP " + expected.label() + " Envelope");
         }
-        Element body = firstChild(env, SOAP_ENV, "Body");
+        Element body = firstChild(env, ns, "Body");
         if (body == null)
             throw MockBankFault.sender("Missing soap:Body");
         for (Node n = body.getFirstChild(); n != null; n = n.getNextSibling()) {
@@ -133,10 +136,11 @@ final class SoapXml {
     }
 
     /** New envelope document; returns the soap:Body element to append into. */
-    static Element newEnvelopeBody(Document doc) {
-        Element env = doc.createElementNS(SOAP_ENV, "soap:Envelope");
+    static Element newEnvelopeBody(Document doc, SoapVersion version) {
+        String ns = version.envelopeNamespace();
+        Element env = doc.createElementNS(ns, "soap:Envelope");
         doc.appendChild(env);
-        Element body = doc.createElementNS(SOAP_ENV, "soap:Body");
+        Element body = doc.createElementNS(ns, "soap:Body");
         env.appendChild(body);
         return body;
     }
@@ -149,17 +153,35 @@ final class SoapXml {
         return e;
     }
 
-    static String fault(MockBankFault.Code code, String message) {
+    /**
+     * SOAP 1.1: unqualified faultcode and faultstring. SOAP 1.2: qualified
+     * Code/Value and Reason/Text with {@code xml:lang="en"}.
+     */
+    static String fault(SoapVersion version, MockBankFault.Code code, String message) {
         Document doc = newBuilder().newDocument();
-        Element body = newEnvelopeBody(doc);
-        Element fault = doc.createElementNS(SOAP_ENV, "soap:Fault");
+        Element body = newEnvelopeBody(doc, version);
+        String ns = version.envelopeNamespace();
+        Element fault = doc.createElementNS(ns, "soap:Fault");
         body.appendChild(fault);
-        Element fc = doc.createElement("faultcode");
-        fc.setTextContent(code.soap11());
-        fault.appendChild(fc);
-        Element fs = doc.createElement("faultstring");
-        fs.setTextContent(message);
-        fault.appendChild(fs);
+        switch (version) {
+            case SOAP_11 -> {
+                Element fc = doc.createElement("faultcode");
+                fc.setTextContent(code.soap11());
+                fault.appendChild(fc);
+                Element fs = doc.createElement("faultstring");
+                fs.setTextContent(message);
+                fault.appendChild(fs);
+            }
+            case SOAP_12 -> {
+                Element value = doc.createElementNS(ns, "soap:Value");
+                value.setTextContent(code.soap12());
+                fault.appendChild(doc.createElementNS(ns, "soap:Code")).appendChild(value);
+                Element text = doc.createElementNS(ns, "soap:Text");
+                text.setAttributeNS(XMLConstants.XML_NS_URI, "xml:lang", "en");
+                text.setTextContent(message);
+                fault.appendChild(doc.createElementNS(ns, "soap:Reason")).appendChild(text);
+            }
+        }
         return serialize(doc);
     }
 

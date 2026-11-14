@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.soapnecromancer.runtime.model.BuiltIn;
 import dev.soapnecromancer.runtime.model.FieldModel;
 import dev.soapnecromancer.runtime.model.ServiceModel;
+import dev.soapnecromancer.runtime.model.SoapVersion;
 import dev.soapnecromancer.runtime.model.TypeModel;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -138,11 +139,28 @@ class WsdlParserTest {
                 }
 
                 @Test
-                void req2_3_2_11_soap12OnlyIsFatalWithWarning() {
-                        assertThatThrownBy(() -> parse(Wsdls.wsdl().soap12().build()))
-                                        .isInstanceOfSatisfying(WsdlParseException.class,
-                                                        e -> assertThat(e.warnings()).extracting(Warning::code)
-                                                                        .contains("SOAP12_BINDING"));
+                void req2_2_req2_3_soap12OnlyIsParsedAndRecorded() {
+                        ParseResult r = parse(Wsdls.wsdl().soap12().build());
+                        assertThat(r.warnings()).isEmpty();
+                        assertThat(r.model().soapVersion()).isEqualTo(SoapVersion.SOAP_12);
+                        assertThat(r.model().endpointUrl()).isEqualTo("http://legacy.example/ws");
+                        assertThat(r.model().operations()).singleElement().extracting("soapAction")
+                                        .isEqualTo("urn:t:Op");
+                }
+
+                @Test
+                void req2_3_soap11IsRecordedToo() {
+                        assertThat(parse(Wsdls.wsdl().build()).model().soapVersion()).isEqualTo(SoapVersion.SOAP_11);
+                }
+
+                @Test
+                void req2_11_noSoapBindingAtAllIsFatal() {
+                        byte[] http = new String(Wsdls.wsdl().build(), StandardCharsets.UTF_8)
+                                        .replace("http://schemas.xmlsoap.org/wsdl/soap/",
+                                                        "http://schemas.xmlsoap.org/wsdl/http/")
+                                        .getBytes(StandardCharsets.UTF_8);
+                        assertThatThrownBy(() -> parse(http)).isInstanceOf(WsdlParseException.class)
+                                        .hasMessageContaining("SOAP 1.1 or 1.2");
                 }
 
                 @Test

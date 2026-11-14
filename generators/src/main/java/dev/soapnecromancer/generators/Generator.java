@@ -5,6 +5,7 @@ import dev.soapnecromancer.core.ParseResult;
 import dev.soapnecromancer.core.Warning;
 import dev.soapnecromancer.runtime.model.OperationModel;
 import dev.soapnecromancer.runtime.model.ServiceModel;
+import dev.soapnecromancer.runtime.model.SoapVersion;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -55,6 +56,7 @@ public final class Generator {
         r.put("generator", "SOAP Necromancer");
         r.put("version", Versions.GENERATOR);
         r.put("service", model.name());
+        r.put("soapVersion", model.soapVersion().label());
         r.put("operations", model.operations().stream().map(OperationModel::name).toList());
         r.put("warnings", warnings);
         return r;
@@ -65,6 +67,10 @@ public final class Generator {
         ctx.put("serviceName", Escapes.markdown(model.name()));
         ctx.put("generatorVersion", Versions.GENERATOR);
         ctx.put("operationCount", model.operations().size());
+        ctx.put("soapVersionLabel", model.soapVersion().label());
+        ctx.put("soap12", model.soapVersion() == SoapVersion.SOAP_12);
+        ctx.put("clientFaultName", Faults.client(model.soapVersion()));
+        ctx.put("serverFaultName", Faults.server(model.soapVersion()));
         ctx.put("artifactId", ProxyGenerator.artifactId(model));
         ctx.put("mcpArtifactId", McpServerGenerator.artifactId(model));
         String endpoint = ProxyGenerator.defaultEndpoint(model);

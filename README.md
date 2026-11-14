@@ -6,7 +6,7 @@ Resurrect legacy SOAP services for REST clients and AI agents. Built for Kirowee
 Upload a WSDL 1.1 `document/literal` file. The generator parses it and returns a zip with:
 
 - an OpenAPI 3.0 spec,
-- a generated proxy (Spring Boot 3, JSON/HTTP to SOAP 1.1),
+- a generated proxy (Spring Boot 3, JSON/HTTP to SOAP 1.1 or 1.2, whichever the WSDL binds),
 - a generated MCP server (one tool per SOAP operation),
 - REST Assured contract tests and jqwik JSON<->XML round-trip tests.
 
@@ -21,12 +21,13 @@ java -jar web/target/soap-necromancer.jar
 ```
 
 Open http://localhost:8080. It listens on `PORT` (default 8080) and also serves the bundled legacy
-bank SOAP service at `/mock-bank/ws`. The build downloads a pinned Node to compile the UI; add
+bank SOAP service at `/mock-bank/ws` (SOAP 1.1) and `/mock-bank/ws12` (SOAP 1.2). The build downloads a pinned Node to compile the UI; add
 `-Dskip.installnodenpm -Dskip.npm` to skip that and keep the last UI build.
 
 ## Use the UI
 
-One page: drop a WSDL file (or click **Resurrect the sample bank WSDL**), then read the warnings,
+One page: drop a WSDL file (or click **Resurrect the sample bank WSDL**, or **Same bank over SOAP
+1.2**), then read the warnings,
 browse every generated file in tabs (README, OpenAPI, generated proxy, tests, generated MCP server,
 model and report), and download the zip. The browser unpacks the zip itself, so the server still
 holds nothing. A 422 shows the same warnings table with the reason the WSDL was rejected. Source and
@@ -36,6 +37,9 @@ dev setup: `frontend/README.md`.
 curl -o bank.wsdl http://localhost:8080/api/sample-wsdl
 curl -F wsdl=@bank.wsdl http://localhost:8080/api/generate -o resurrected.zip
 ```
+
+`/api/sample-wsdl?soap=1.2` returns the same bank with a SOAP 1.2 binding, addressed at
+`/mock-bank/ws12` (any other `soap` value is a 400).
 
 ## Generator API
 
@@ -51,6 +55,7 @@ directly. Nothing is stored. Imported schemas and WSDLs are never fetched; they 
   "generator": "SOAP Necromancer",
   "version": "0.1.0-SNAPSHOT",
   "service": "LegacyBankService",
+  "soapVersion": "1.1",
   "operations": ["GetBalance", "Transfer", "GetStatement"],
   "warnings": [
     {
@@ -81,16 +86,22 @@ A 422 always carries the same `warnings` array as the zip report, so a UI can re
   "type": "about:blank",
   "title": "WSDL cannot be resurrected",
   "status": 422,
-  "detail": "No supported operations: the generator needs a SOAP 1.1 document/literal binding",
+  "detail": "No supported operations: the generator needs a SOAP 1.1 or 1.2 document/literal binding",
   "warnings": [
     {
-      "code": "SOAP12_BINDING",
-      "message": "SOAP 1.2 bindings are not supported and are skipped",
-      "location": "service[S]/port[P]"
+      "code": "RPC_STYLE",
+      "message": "rpc style is not supported; operation skipped",
+      "location": "binding[B]/operation[Echo]"
     }
   ]
 }
 ```
+
+**SOAP 1.2:** a `soap12:` binding is handled like a SOAP 1.1 one. The generated proxy then sends
+`application/soap+xml; charset=utf-8; action="..."` with no `SOAPAction` header, and reads SOAP 1.2
+faults (`Code/Value`, `Reason/Text`; a `Sender` fault is a 400). The Problem body keeps the
+`faultcode` and `faultstring` fields for both versions. When a WSDL offers both bindings, the SOAP 1.1
+port is used and the others are listed in a `MULTIPLE_PORTS` warning.
 
 Resource limits (all 422): more than 200 operations (`LIMIT_OPERATIONS`), 1,000 reachable types
 (`LIMIT_TYPES`), types nested or chained more than 64 deep (`LIMIT_DEPTH`), XML deeper than 256
@@ -98,7 +109,10 @@ elements, required fields that contain their own type (`UNSATISFIABLE_RECURSION`
 over 20,000 definitions (`LIMIT_TOOL_SCHEMAS`), or output over 16 MB (`LIMIT_OUTPUT`). Optional
 recursion, such as a tree, is supported.
 
-**Demo bank:** every visitor shares the in-memory bank at `/mock-bank/ws`. It returns to its seeded
+**Demo bank:** every visitor shares the in-memory bank at `/mock-bank/ws` (SOAP 1.1) and
+`/mock-bank/ws12` (SOAP 1.2); both use one ledger and one rate limit. `GET <path>?wsdl` returns that
+path's WSDL. Each path accepts only its own envelope version; the other gets a SOAP 1.1
+`VersionMismatch` fault. SOAP 1.2 faults are HTTP 400 for `Sender` and 500 otherwise. It returns to its seeded
 accounts every 30 minutes (`MOCKBANK_RESET_INTERVAL`), on restart, and on `POST /mock-bank/reset`
 with `Content-Type: application/json`, at most once per 30 s (429 otherwise). Because it is public,
 it is bounded: SOAP envelopes up to 64 KB, amounts as plain `xs:decimal` with at most 18 digits on
@@ -152,8 +166,8 @@ Requires Java 21 and Maven 3.9+.
 
 ## Supported and unsupported
 
-- Supported: SOAP 1.1, `document/literal`, core XSD subset.
-- Unsupported (reported as warnings): SOAP 1.2, rpc/encoded, WS-Security, and XSD
+- Supported: SOAP 1.1 and SOAP 1.2 over HTTP, `document/literal`, core XSD subset.
+- Unsupported (reported as warnings): rpc/encoded, WS-Security, WS-Addressing, and XSD
   features outside the core subset.
 
 ## Future work

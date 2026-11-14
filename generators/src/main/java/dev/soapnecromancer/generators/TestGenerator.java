@@ -4,6 +4,7 @@ import dev.soapnecromancer.runtime.model.BuiltIn;
 import dev.soapnecromancer.runtime.model.FieldModel;
 import dev.soapnecromancer.runtime.model.OperationModel;
 import dev.soapnecromancer.runtime.model.ServiceModel;
+import dev.soapnecromancer.runtime.model.SoapVersion;
 import dev.soapnecromancer.runtime.model.TypeModel;
 
 import java.util.HashMap;
@@ -28,6 +29,14 @@ public final class TestGenerator {
 
         Map<String, Object> ctx = new HashMap<>();
         ctx.put("package", pkg);
+        // The stub speaks the model's SOAP version (generators Requirement 3.3).
+        SoapVersion version = model.soapVersion();
+        ctx.put("soap12", version == SoapVersion.SOAP_12);
+        ctx.put("soapVersionLabel", version.label());
+        ctx.put("envelopeNsJava", Escapes.javaString(version.envelopeNamespace()));
+        ctx.put("mediaTypeJava", Escapes.javaString(version.mediaType()));
+        ctx.put("clientFaultName", Faults.client(version));
+        ctx.put("serverFaultName", Faults.server(version));
         for (String cls : List.of("StubSoapServer", "ContractTestSupport", "RoundTripProperties")) {
             out.add(dir + cls + ".java", Templates.render("proxy/test/" + cls + ".java", ctx));
         }

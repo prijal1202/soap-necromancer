@@ -1,5 +1,6 @@
 package {{package}};
 
+import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.soapnecromancer.runtime.RuntimeXml;
 import org.w3c.dom.Element;
@@ -12,15 +13,25 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
- * Stand-in SOAP backend for the generated contract tests: records every request and answers with
- * whatever the test configured. Lets the tests run with no real SOAP endpoint (Requirement 3.6).
+ * Stand-in SOAP {{soapVersionLabel}} backend for the generated contract tests: records every request
+ * and answers with whatever the test configured. Lets the tests run with no real SOAP endpoint
+ * (Requirement 3.6).
  */
 final class StubSoapServer {
-    static final String SOAP_ENV = "http://schemas.xmlsoap.org/soap/envelope/";
+    static final String SOAP_ENV = {{envelopeNsJava}};
+    /** Media type of requests and replies for this service's SOAP version. */
+    static final String MEDIA_TYPE = {{mediaTypeJava}};
+    static final String CLIENT_FAULT = {{#soap12}}"soap:Sender"{{/soap12}}{{^soap12}}"soap:Client"{{/soap12}};
+    static final String SERVER_FAULT = {{#soap12}}"soap:Receiver"{{/soap12}}{{^soap12}}"soap:Server"{{/soap12}};
+    /** SOAP 1.1 sends every fault with HTTP 500; the SOAP 1.2 HTTP binding sends Sender faults with 400. */
+    static final int CLIENT_FAULT_STATUS = {{#soap12}}400{{/soap12}}{{^soap12}}500{{/soap12}};
 
-    record Received(String soapAction, String contentType, String body) {}
+    /** {@code action} is what the client sent as the SOAP action, quotes included, or null. */
+    record Received(String action, String contentType, String body) {}
 
     private final HttpServer server;
     private final List<Received> received = new CopyOnWriteArrayList<>();
@@ -35,10 +46,10 @@ final class StubSoapServer {
         }
         server.createContext("/soap", exchange -> {
             String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-            received.add(new Received(exchange.getRequestHeaders().getFirst("SOAPAction"),
-                    exchange.getRequestHeaders().getFirst("Content-Type"), body));
+            String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+            received.add(new Received(action(exchange, contentType), contentType, body));
             byte[] out = reply.getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().add("Content-Type", "text/xml; charset=utf-8");
+            exchange.getResponseHeaders().add("Content-Type", MEDIA_TYPE + "; charset=utf-8");
             exchange.sendResponseHeaders(status, out.length);
             exchange.getResponseBody().write(out);
             exchange.close();
@@ -46,6 +57,25 @@ final class StubSoapServer {
         reset();
         server.start();
     }
+{{#soap12}}
+
+    private static final Pattern ACTION = Pattern.compile(";\\s*action=(\"(?:[^\"\\\\]|\\\\.)*\")");
+
+    /** SOAP 1.2: the action is a parameter of the Content-Type, there is no SOAPAction header. */
+    private static String action(HttpExchange exchange, String contentType) {
+        if (exchange.getRequestHeaders().containsKey("SOAPAction"))
+            throw new AssertionError("a SOAP 1.2 request must not carry a SOAPAction header");
+        Matcher m = ACTION.matcher(contentType == null ? "" : contentType);
+        return m.find() ? m.group(1) : null;
+    }
+{{/soap12}}
+{{^soap12}}
+
+    /** SOAP 1.1: the action is the SOAPAction header. */
+    private static String action(HttpExchange exchange, String contentType) {
+        return exchange.getRequestHeaders().getFirst("SOAPAction");
+    }
+{{/soap12}}
 
     static StubSoapServer start() {
         return new StubSoapServer();
@@ -55,10 +85,10 @@ final class StubSoapServer {
         return "http://127.0.0.1:" + server.getAddress().getPort() + "/soap";
     }
 
-    /** Forget requests; until configured, answer every call with a Server fault. */
+    /** Forget requests; until configured, answer every call with a server fault. */
     void reset() {
         received.clear();
-        reply(500, fault("soap:Server", "stub reply not configured"));
+        reply(500, fault(SERVER_FAULT, "stub reply not configured"));
     }
 
     void reply(int status, String body) {
@@ -78,6 +108,8 @@ final class StubSoapServer {
     /** First element inside soap:Body of the last request. */
     Element lastPayload() throws Exception {
         Element env = RuntimeXml.parse(last().body()).getDocumentElement();
+        if (!SOAP_ENV.equals(env.getNamespaceURI()))
+            throw new AssertionError("expected a SOAP {{soapVersionLabel}} envelope: " + last().body());
         for (Node b = env.getFirstChild(); b != null; b = b.getNextSibling()) {
             if (b instanceof Element body && "Body".equals(body.getLocalName())) {
                 for (Node n = body.getFirstChild(); n != null; n = n.getNextSibling()) {
@@ -94,7 +126,14 @@ final class StubSoapServer {
     }
 
     static String fault(String code, String message) {
-        return envelope("<soap:Fault><faultcode>" + code + "</faultcode><faultstring>"
-                + message.replace("&", "&amp;").replace("<", "&lt;") + "</faultstring></soap:Fault>");
+        String text = message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+{{#soap12}}
+        return envelope("<soap:Fault><soap:Code><soap:Value>" + code + "</soap:Value></soap:Code>"
+                + "<soap:Reason><soap:Text xml:lang=\"en\">" + text + "</soap:Text></soap:Reason></soap:Fault>");
+{{/soap12}}
+{{^soap12}}
+        return envelope("<soap:Fault><faultcode>" + code + "</faultcode><faultstring>" + text
+                + "</faultstring></soap:Fault>");
+{{/soap12}}
     }
 }

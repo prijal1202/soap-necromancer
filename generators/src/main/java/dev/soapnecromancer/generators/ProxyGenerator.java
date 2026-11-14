@@ -41,6 +41,7 @@ public final class ProxyGenerator {
         ctx.put("serviceNameXmlComment", Escapes.xmlComment(model.name()));
         ctx.put("serviceNamePom", Escapes.pomText(model.name()));
         ctx.put("artifactId", artifactId(model));
+        ctx.put("soapVersionLabel", model.soapVersion().label());
         ctx.put("generatorVersion", Versions.GENERATOR);
         ctx.put("springBootVersion", Versions.SPRING_BOOT);
         ctx.put("jqwikVersion", Versions.JQWIK);

@@ -36,5 +36,6 @@
   Logs go to stderr only (stdout is the protocol channel).
 - OpenAPI: emitted directly from the canonical model; `swagger-parser` 2.1.48 in test scope only.
 - Templates: JMustache 1.16, under `generators/src/main/resources/templates/`.
-- Render: `server.port=${PORT:8080}`, mock-bank at `/mock-bank/ws` in the same JVM,
+- Render: `server.port=${PORT:8080}`, mock-bank at `/mock-bank/ws` (SOAP 1.1) and
+  `/mock-bank/ws12` (SOAP 1.2) in the same JVM,
   `-XX:MaxRAMPercentage=70 -XX:+UseSerialGC`.

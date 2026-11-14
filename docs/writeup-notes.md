@@ -124,3 +124,12 @@ regression test first. The ones worth telling:
     problem-details support in the generated proxy made Boot's handler win over the generated one for
     invalid JSON, silently dropping the `path` property. Only the end-to-end test against a real
     built proxy noticed.
+
+## SOAP 1.2 (after the production review)
+
+16. **One model field, every layer.** SOAP 1.2 support is a `soapVersion` on the canonical model, set
+    by the parser from the WSDL binding. The generated proxy, its generated tests, the OpenAPI text
+    and the README all follow from it; the generated MCP server needed no change because it only
+    talks REST. The demo bank serves the same ledger at `/mock-bank/ws12`. `GeneratedProject12IT`
+    generates from that live WSDL, builds the generated proxy (whose own contract tests run against a
+    SOAP 1.2 stub), and moves `1234567890.123456789` end to end over SOAP 1.2.

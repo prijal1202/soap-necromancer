@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -124,14 +125,28 @@ public class GenerateController {
 
     /**
      * The bank WSDL, with soap:address pointing at this app's mock-bank (live demo
-     * and UI sample).
+     * and UI sample). {@code ?soap=1.2} returns the SOAP 1.2 binding, addressed at
+     * {@value MockBankEndpoint#PATH_12}.
      */
     @GetMapping(path = "/api/sample-wsdl", produces = MediaType.TEXT_XML_VALUE)
-    public ResponseEntity<String> sampleWsdl() {
+    public ResponseEntity<String> sampleWsdl(@RequestParam(name = "soap", defaultValue = "1.1") String soap) {
+        String filename;
+        String body;
+        switch (soap) {
+            case "1.1" -> {
+                filename = "bank.wsdl";
+                body = mockBank.wsdl();
+            }
+            case "1.2" -> {
+                filename = "bank-soap12.wsdl";
+                body = mockBank.wsdl12();
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "soap must be 1.1 or 1.2");
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.inline().filename("bank.wsdl").build().toString())
-                .body(mockBank.wsdl());
+                        ContentDisposition.inline().filename(filename).build().toString())
+                .body(body);
     }
 
     @GetMapping("/api/health")
