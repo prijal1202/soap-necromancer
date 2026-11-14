@@ -41,7 +41,10 @@ absolute path to the jar:
 
 ## Notes
 
-- Tool inputs are validated against their JSON Schema before anything is sent.
+- Tool inputs are checked by the generated proxy before anything reaches SOAP: an unknown field,
+  a missing required field or a wrong type comes back as an error naming its JSON path.
+- Tool descriptions quote the WSDL's documentation as data. Read them before letting an agent act
+  on a backend you do not control.
 - Decimal fields are JSON numbers and keep every digit (no floating point on the way to SOAP).
 - Errors (invalid input, SOAP faults, an unreachable proxy) come back as tool results with
   `isError: true` and a readable message.

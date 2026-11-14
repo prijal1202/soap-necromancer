@@ -35,7 +35,11 @@ public final class SecureXml {
 
     public static DocumentBuilder newBuilder() {
         try {
-            DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+            // The JDK's own parser: the maxElementDepth property below is JDK-specific, and
+            // another
+            // JAXP provider on the classpath could otherwise reject or ignore these
+            // settings.
+            DocumentBuilderFactory f = DocumentBuilderFactory.newDefaultInstance();
             f.setNamespaceAware(true);
             f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             f.setFeature("http://xml.org/sax/features/external-general-entities", false);

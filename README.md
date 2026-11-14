@@ -64,13 +64,15 @@ directly. Nothing is stored. Imported schemas and WSDLs are never fetched; they 
 
 **Errors** are RFC 7807 `application/problem+json` with `type`, `title`, `status`, `detail`:
 
-| Status | When                                                           | Extra                          |
-| ------ | -------------------------------------------------------------- | ------------------------------ |
-| 400    | Empty upload, or multipart without the `wsdl` field            |                                |
-| 413    | Upload over 2 MB (`MAX_UPLOAD_BYTES`)                          |                                |
-| 415    | Content type is not multipart, `text/xml` or `application/xml` |                                |
-| 422    | Not a usable WSDL 1.1, or over a resource limit                | `warnings`                     |
-| 503    | Generator busy for more than 5 s                               | `Retry-After` header (seconds) |
+| Status | When                                                                      | Extra                          |
+| ------ | ------------------------------------------------------------------------- | ------------------------------ |
+| 400    | Empty upload, malformed multipart, or multipart without the `wsdl` field  |                                |
+| 413    | Upload over 2 MB (`MAX_UPLOAD_BYTES`)                                     |                                |
+| 415    | Content type is not multipart, `text/xml` or `application/xml`            |                                |
+| 422    | Not a usable WSDL 1.1, or over a resource limit                           | `warnings`                     |
+| 429    | More than 30 generations a minute from one client (`GENERATE_PER_MINUTE`) | `Retry-After` header (seconds) |
+| 503    | Generator busy for more than 5 s                                          | `Retry-After` header (seconds) |
+| 500    | A bug: logged, answered with a fixed message (never a stack trace)        |                                |
 
 A 422 always carries the same `warnings` array as the zip report, so a UI can render both the same way:
 
@@ -97,7 +99,17 @@ over 20,000 definitions (`LIMIT_TOOL_SCHEMAS`), or output over 16 MB (`LIMIT_OUT
 recursion, such as a tree, is supported.
 
 **Demo bank:** every visitor shares the in-memory bank at `/mock-bank/ws`. It returns to its seeded
-accounts every 30 minutes (`MOCKBANK_RESET_INTERVAL`), on restart, and on `POST /mock-bank/reset`.
+accounts every 30 minutes (`MOCKBANK_RESET_INTERVAL`), on restart, and on `POST /mock-bank/reset`
+with `Content-Type: application/json`, at most once per 30 s (429 otherwise). Because it is public,
+it is bounded: SOAP envelopes up to 64 KB, amounts as plain `xs:decimal` with at most 18 digits on
+each side of the point, memos up to 140 characters, the newest 200 statement lines per account, and
+120 SOAP calls a minute per client (`MOCK_BANK_PER_MINUTE`). Every failure, including an unexpected
+one, is a SOAP fault.
+
+**Hardening of the public site:** a Content-Security-Policy that allows only this origin's scripts,
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer` on every
+response; at most 16 request threads, so waiting uploads cannot exhaust the 512 MB heap; multipart
+parts kept in memory, so nothing is written to disk.
 
 ## Deploying (Render)
 

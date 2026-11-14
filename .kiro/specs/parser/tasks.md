@@ -14,3 +14,5 @@
   - _Requirements: 4.2_
 - [x] 7. Tests: golden `bank.wsdl`, negative fixtures per warning group, fatal cases
   - _Requirements: 4.1, 4.3, and all warning codes_
+- [ ] 8. Hardening from the production review: every `wsdl:types` stripped before WSDL4J plus a refusing locator; every processing error is fatal or a warning; document-order port and binding choice; unsupported bindings, missing address, duplicate and invalid operation names, header parts, invalid element names and occurrence bounds
+  - _Requirements: 1.5, 1.6, 2.6, 2.10, 2.13-2.17, 3.12, 3.13_

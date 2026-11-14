@@ -25,6 +25,8 @@ malicious WSDL cannot read files or reach internal hosts.
 2. The parser SHALL NOT fetch any `wsdl:import`, `xs:import` or `xs:include` location over the network or file system.
 3. WHEN an import or include references an external location THEN the parser SHALL emit warning `EXTERNAL_IMPORT` with the location attribute.
 4. WHEN the input is not well-formed XML THEN the parser SHALL return a fatal error describing the problem.
+5. WHEN the document has more than one `wsdl:types` element THEN the parser SHALL read the schemas of all of them, and criterion 2 SHALL hold for every one.
+6. WHEN any part of the input cannot be processed (invalid schema content such as `minOccurs="x"`, undeclared prefixes, conflicting schema locations, missing `name` attributes) THEN the parser SHALL return a fatal error or a warning, and SHALL NOT fail in any other way.
 
 ### Requirement 2: Service structure
 
@@ -38,13 +40,18 @@ every generator exposes exactly the legacy service's capabilities.
 3. WHEN a binding is SOAP 1.2 THEN the parser SHALL skip it and emit `SOAP12_BINDING`.
 4. WHEN an operation is `rpc` style THEN the parser SHALL skip it and emit `RPC_STYLE`.
 5. WHEN an operation body is `use="encoded"` THEN the parser SHALL skip it and emit `ENCODED_USE`.
-6. WHEN an input or output message does not have exactly one part bound to an element THEN the parser SHALL skip the operation and emit `UNSUPPORTED_MESSAGE`.
+6. WHEN an input or output message does not have exactly one body part bound to an element THEN the parser SHALL skip the operation and emit `UNSUPPORTED_MESSAGE`. Body parts are those listed by `soap:body parts=`; without `parts=`, every part not bound by a `soap:header` of the same message, or every part when that would leave none (WSDL 1.1 section 3.5).
 7. WHEN an operation has no output (one-way) THEN the parser SHALL skip it and emit `ONE_WAY_OPERATION`.
 8. WHEN an operation declares `soap:header` THEN the parser SHALL keep the operation, ignore the header and emit `SOAP_HEADER`.
 9. WHEN the document contains WS-Policy or WS-Security elements THEN the parser SHALL emit `WS_SECURITY` and keep the operations.
-10. WHEN more than one SOAP 1.1 port exists THEN the parser SHALL use the first and emit `MULTIPLE_PORTS`.
+10. WHEN more than one SOAP 1.1 port exists THEN the parser SHALL use the first in document order and emit `MULTIPLE_PORTS` naming the chosen and the skipped ports.
 11. WHEN no usable operation remains THEN the parser SHALL return a fatal error that lists the warnings.
 12. The parser SHALL record each operation's name, soapAction, documentation, input element and output element.
+13. WHEN a port's binding is undefined or is not a SOAP binding (for example HTTP or MIME) THEN the parser SHALL skip the port and emit `UNSUPPORTED_BINDING`.
+14. WHEN the chosen port has no address THEN the parser SHALL emit `NO_ADDRESS` (the endpoint must then be configured).
+15. WHEN no `wsdl:service` has a usable port THEN the parser SHALL use the first SOAP 1.1 binding in document order, emit `NO_ADDRESS`, and emit `MULTIPLE_PORTS` if other SOAP 1.1 bindings are skipped.
+16. WHEN a binding has two operations with the same name (overloads) THEN the parser SHALL keep the first and emit `DUPLICATE_OPERATION`.
+17. WHEN an operation name does not match `[A-Za-z_][A-Za-z0-9_.-]*` or is longer than 128 characters THEN the parser SHALL skip the operation and emit `UNSUPPORTED_NAME`. Operation names become URL paths, MCP tool names and file names.
 
 ### Requirement 3: XSD core subset
 
@@ -64,6 +71,8 @@ XML convert without data loss.
 9. WHEN schemas declare more than one target namespace THEN the parser SHALL process them and emit `MULTIPLE_NAMESPACES`.
 10. Type ids SHALL be unique and stable for the same input.
 11. WHEN a complex type has two fields with the same local name THEN the parser SHALL keep the first, drop the rest and emit `XSD_DUPLICATE_FIELD` (field names are JSON property names).
+12. WHEN an element name is not an XML NCName THEN the parser SHALL drop the field and emit `XSD_INVALID_NAME` (names are written into XML by the converter).
+13. WHEN `minOccurs` is larger than `maxOccurs` or larger than 1000 THEN the parser SHALL emit `XSD_OCCURS` and clamp it to the smaller of the two bounds.
 
 ### Requirement 5: Resource limits
 

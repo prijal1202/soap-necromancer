@@ -65,19 +65,27 @@ export default function App() {
           })
           return
         }
-        if (outcome.problem.status === 503 && attempt < MAX_BUSY_RETRIES) {
+        const retryable = outcome.problem.status === 503 || outcome.problem.status === 429
+        if (retryable && attempt < MAX_BUSY_RETRIES) {
           const wait = Math.min(outcome.retryAfterSeconds ?? 5, MAX_RETRY_WAIT_SECONDS)
           setState({ phase: 'working', source: label, note: `the generator is busy, retrying in ${wait} s…` })
-          await new Promise((resolve) => setTimeout(resolve, wait * 1000))
+          // Jitter, so visitors told the same Retry-After do not all come back in the same instant.
+          await new Promise((resolve) => setTimeout(resolve, wait * 1000 + Math.random() * 1000))
           if (stale()) return
           continue
         }
-        setState({ phase: 'failed', source: label, problem: outcome.problem })
+        fail(label, outcome.problem)
         return
       }
     } catch (e) {
-      if (!stale()) setState({ phase: 'failed', source: label, problem: clientProblem(e) })
+      if (!stale()) fail(label, clientProblem(e))
     }
+  }
+
+  /** A failure replaces the previous result, so its download URL is released too. */
+  function fail(source: string, problem: Problem) {
+    revokeZip()
+    setState({ phase: 'failed', source, problem })
   }
 
   const busy = state.phase === 'working'
@@ -104,8 +112,12 @@ export default function App() {
           onSample={() => void resurrect(sampleWsdl, 'bank.wsdl (sample)')}
         />
 
-        <section className="panel results" aria-labelledby="results-title" aria-live="polite" aria-busy={busy}>
+        <section className="panel results" aria-labelledby="results-title" aria-busy={busy}>
           <h2 id="results-title">2. Inspect and download</h2>
+          {/* Only this short line is announced; the file viewer below must not be read out on every change. */}
+          <p className="sr-only" role="status">
+            {statusText(state)}
+          </p>
           {state.phase === 'idle' && (
             <p className="placeholder">Nothing summoned yet. The generated files will appear here.</p>
           )}
@@ -160,9 +172,22 @@ function ResultView({ result }: { result: Result }) {
   )
 }
 
+function statusText(state: State): string {
+  switch (state.phase) {
+    case 'idle':
+      return ''
+    case 'working':
+      return `${state.source}: ${state.note}`
+    case 'done':
+      return `Generated ${state.result.fileCount} files for ${state.result.report?.service ?? 'the service'}.`
+    case 'failed':
+      return `${state.problem.title}. ${state.problem.detail}`
+  }
+}
+
 function Failure({ source, problem }: { source: string; problem: Problem }) {
   return (
-    <div className="failure" role="alert">
+    <div className="failure">
       <h3>{problem.title}</h3>
       <p>{problem.detail}</p>
       <p className="meta">

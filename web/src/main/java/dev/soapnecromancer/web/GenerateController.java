@@ -107,12 +107,12 @@ public class GenerateController {
                     result.model().name(), result.model().operations().size(), result.warnings().size(),
                     files.files().size(), zip.length, (System.nanoTime() - start) / 1_000_000);
 
-            String filename = Names.artifactId(result.model().name(), "resurrected") + ".zip";
+            String filename = truncate(Names.artifactId(result.model().name(), "resurrected"), 100) + ".zip";
             return ResponseEntity.ok()
                     .contentType(ZIP)
                     .header(HttpHeaders.CONTENT_DISPOSITION,
                             ContentDisposition.attachment().filename(filename).build().toString())
-                    .header("X-Generator-Service", ascii(result.model().name()))
+                    .header("X-Generator-Service", truncate(ascii(result.model().name()), MAX_HEADER_TEXT))
                     .header("X-Generator-Operations", String.valueOf(result.model().operations().size()))
                     .header("X-Generator-Warnings", String.valueOf(result.warnings().size()))
                     .header(HttpHeaders.CACHE_CONTROL, "no-store")
@@ -152,7 +152,18 @@ public class GenerateController {
         return data;
     }
 
+    /**
+     * Printable ASCII only: no CR/LF, so WSDL text can never split a response
+     * header.
+     */
     private static String ascii(String s) {
         return s.replaceAll("[^\\x20-\\x7E]", "?");
     }
+
+    /** WSDL names are unbounded; Tomcat's response header buffer is 8 KB. */
+    private static String truncate(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max);
+    }
+
+    private static final int MAX_HEADER_TEXT = 200;
 }

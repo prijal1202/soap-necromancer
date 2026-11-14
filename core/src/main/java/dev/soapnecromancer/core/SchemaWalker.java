@@ -57,7 +57,9 @@ final class SchemaWalker {
 
     private String elementType(XmlSchemaElement el, String anonymousId, String location) {
         if (el.isNillable()) {
-            warn("XSD_NILLABLE", "nillable is ignored; xsi:nil is not sent or read", location);
+            warn("XSD_NILLABLE",
+                    "nillable: an xsi:nil element in a response is read as absent; requests never send xsi:nil",
+                    location);
         }
         XmlSchemaType anonymous = el.getSchemaTypeName() == null ? el.getSchemaType() : null;
         if (anonymous != null)
@@ -201,7 +203,9 @@ final class SchemaWalker {
         }
         for (XmlSchemaSequenceMember m : seq.getItems()) {
             if (m instanceof XmlSchemaElement el) {
-                fields.add(field(ownerId, el, location));
+                FieldModel f = field(ownerId, el, location);
+                if (f != null)
+                    fields.add(f);
             } else if (m instanceof XmlSchemaSequence nested) {
                 sequence(ownerId, nested, fields, location);
             } else {
@@ -219,17 +223,51 @@ final class SchemaWalker {
             namespace = ref.getNamespaceURI();
             if (target == null) {
                 warn("UNRESOLVED_TYPE", "Element ref " + ref + " is not defined; mapped to string", location);
-                return new FieldModel(ref.getLocalPart(), namespace, builtIn(BuiltIn.STRING),
-                        (int) el.getMinOccurs(), maxOccurs(el));
+                return occurs(new FieldModel(ref.getLocalPart(), namespace, builtIn(BuiltIn.STRING), 0, 0), el,
+                        location);
             }
         } else {
             namespace = qualified(el) ? el.getParent().getTargetNamespace() : "";
         }
         String name = target.getName();
+        if (name == null || !NCNAME.matcher(name).matches()) {
+            warn("XSD_INVALID_NAME", "Element name is not a valid XML name; field dropped", location);
+            return null;
+        }
         String fieldLoc = location + "/element[" + name + "]";
         String typeId = elementType(target, ownerId + capitalize(name), fieldLoc);
-        return new FieldModel(name, namespace, typeId, (int) el.getMinOccurs(), maxOccurs(el));
+        return occurs(new FieldModel(name, namespace, typeId, 0, 0), el, fieldLoc);
     }
+
+    /**
+     * Requirement 3.13. XmlSchema reports occurrences as longs; values past int
+     * range, a minimum
+     * above the maximum, or a huge minimum (generated tests would build that many
+     * items) are
+     * clamped with a warning.
+     */
+    private FieldModel occurs(FieldModel f, XmlSchemaElement el, String location) {
+        int max = maxOccurs(el);
+        if (max == 0) {
+            warn("XSD_OCCURS", "maxOccurs=0 prohibits the element; field dropped", location);
+            return null;
+        }
+        long rawMin = el.getMinOccurs();
+        long bound = max == FieldModel.UNBOUNDED ? MAX_MIN_OCCURS : Math.min(max, MAX_MIN_OCCURS);
+        int min = (int) Math.max(0, Math.min(rawMin, bound));
+        if (min != rawMin) {
+            warn("XSD_OCCURS", "minOccurs=" + rawMin + " is outside 0.." + bound + "; using " + min, location);
+        }
+        return new FieldModel(f.name(), f.namespace(), f.typeId(), min, max);
+    }
+
+    private static final int MAX_MIN_OCCURS = 1000;
+    /**
+     * XML NCName, approximated by Unicode classes: what an element local name may
+     * be.
+     */
+    private static final java.util.regex.Pattern NCNAME = java.util.regex.Pattern
+            .compile("[\\p{L}_][\\p{L}\\p{N}\\p{M}._\\-\\u00B7]*");
 
     private static boolean qualified(XmlSchemaElement el) {
         XmlSchemaForm form = el.getForm();
@@ -246,16 +284,16 @@ final class SchemaWalker {
     }
 
     private void unsupportedParticle(XmlSchemaObject p, String location) {
-        if (p instanceof XmlSchemaChoice)
-            warn("XSD_CHOICE", "xs:choice is not supported; its elements are dropped", location + "/choice");
-        else if (p instanceof XmlSchemaAll)
-            warn("XSD_ALL", "xs:all is not supported; its elements are dropped", location + "/all");
-        else if (p instanceof XmlSchemaAny)
-            warn("XSD_ANY", "xs:any is not supported and is dropped", location + "/any");
-        else if (p instanceof XmlSchemaGroupRef)
-            warn("XSD_GROUP", "xs:group references are not supported and are dropped", location + "/group");
-        else
-            warn("XSD_GROUP", "Unsupported particle " + p.getClass().getSimpleName() + " dropped", location);
+        switch (p) {
+            case XmlSchemaChoice c ->
+                warn("XSD_CHOICE", "xs:choice is not supported; its elements are dropped", location + "/choice");
+            case XmlSchemaAll a ->
+                warn("XSD_ALL", "xs:all is not supported; its elements are dropped", location + "/all");
+            case XmlSchemaAny a -> warn("XSD_ANY", "xs:any is not supported and is dropped", location + "/any");
+            case XmlSchemaGroupRef g ->
+                warn("XSD_GROUP", "xs:group references are not supported and are dropped", location + "/group");
+            default -> warn("XSD_GROUP", "Unsupported particle " + p.getClass().getSimpleName() + " dropped", location);
+        }
     }
 
     private static String capitalize(String s) {

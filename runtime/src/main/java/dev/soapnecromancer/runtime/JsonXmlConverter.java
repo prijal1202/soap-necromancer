@@ -25,8 +25,27 @@ import java.util.concurrent.ConcurrentHashMap;
  * See .kiro/specs/converter/requirements.md.
  */
 public final class JsonXmlConverter {
+    /** Converter Requirements 1.14 and 2.8. */
+    public static final int MAX_DEPTH = RuntimeXml.MAX_ELEMENT_DEPTH;
+    /**
+     * Converter Requirement 1.8: digits before the point, and the scale, are
+     * bounded by this.
+     */
+    public static final int MAX_NUMBER_DIGITS = 1000;
+    private static final String XSI = "http://www.w3.org/2001/XMLSchema-instance";
+    /** Error messages quote at most this much of a value (Requirement 2.12). */
+    private static final int QUOTE = 40;
+
+    /**
+     * Namespace prefixes and their declarations for one root element, computed
+     * once.
+     */
+    private record RootPlan(Map<String, String> prefixes, String declarations) {
+    }
+
     private final ServiceModel model;
-    private final Map<ElementRef, List<String>> namespacesByRoot = new ConcurrentHashMap<>();
+    private final Map<ElementRef, RootPlan> plans = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> fieldNames = new ConcurrentHashMap<>();
 
     public JsonXmlConverter(ServiceModel model) {
         this.model = Objects.requireNonNull(model);
@@ -39,23 +58,29 @@ public final class JsonXmlConverter {
     // ---------------------------------------------------------------- JSON -> XML
 
     public String toXml(ElementRef root, Object json) {
-        List<String> namespaces = namespacesByRoot.computeIfAbsent(root, this::collectNamespaces);
-        Map<String, String> prefixes = new HashMap<>();
-        for (int i = 0; i < namespaces.size(); i++)
-            prefixes.put(namespaces.get(i), "ns" + (i + 1));
-
-        StringBuilder decl = new StringBuilder();
-        for (String ns : namespaces) {
-            decl.append(" xmlns:").append(prefixes.get(ns)).append("=\"");
-            RuntimeXml.appendEscaped(decl, ns, true);
-            decl.append('"');
-        }
-        StringBuilder out = new StringBuilder(256);
         if (json == null)
             throw new ConversionException("$", "request body is required");
-        writeElement(out, qname(prefixes, root.namespace(), root.localName()), decl.toString(),
-                model.type(root.typeId()), json, "$", prefixes);
+        RootPlan plan = plans.computeIfAbsent(root, this::plan);
+        StringBuilder out = new StringBuilder(256);
+        writeElement(out, qname(plan.prefixes(), root.namespace(), root.localName()), plan.declarations(),
+                model.type(root.typeId()), json, "$", plan.prefixes(), 1);
         return out.toString();
+    }
+
+    private RootPlan plan(ElementRef root) {
+        List<String> namespaces = collectNamespaces(root);
+        Map<String, String> prefixes = new HashMap<>();
+        StringBuilder decl = new StringBuilder();
+        for (int i = 0; i < namespaces.size(); i++) {
+            String ns = namespaces.get(i);
+            String prefix = "ns" + (i + 1);
+            prefixes.put(ns, prefix);
+            decl.append(" xmlns:").append(prefix).append("=\"");
+            if (RuntimeXml.appendEscaped(decl, ns, true) >= 0)
+                throw new IllegalStateException("namespace contains a character not allowed in XML: " + ns);
+            decl.append('"');
+        }
+        return new RootPlan(Map.copyOf(prefixes), decl.toString());
     }
 
     private List<String> collectNamespaces(ElementRef root) {
@@ -82,10 +107,12 @@ public final class JsonXmlConverter {
     }
 
     private void writeElement(StringBuilder out, String qname, String nsDecl, TypeModel type, Object value,
-            String path, Map<String, String> prefixes) {
+            String path, Map<String, String> prefixes, int depth) {
+        if (depth > MAX_DEPTH)
+            throw new ConversionException(path, "value nests deeper than " + MAX_DEPTH + " levels");
         out.append('<').append(qname).append(nsDecl).append('>');
         if (type.isComplex()) {
-            writeComplex(out, type, value, path, prefixes);
+            writeComplex(out, type, value, path, prefixes, depth);
         } else {
             String text = lexical(type, value, path);
             int bad = RuntimeXml.appendEscaped(out, text, false);
@@ -98,13 +125,12 @@ public final class JsonXmlConverter {
     }
 
     private void writeComplex(StringBuilder out, TypeModel type, Object value, String path,
-            Map<String, String> prefixes) {
+            Map<String, String> prefixes, int depth) {
         if (!(value instanceof Map<?, ?> obj)) {
             throw new ConversionException(path, "expected a JSON object, got " + describe(value));
         }
-        Set<String> known = new HashSet<>();
-        for (FieldModel f : type.fields())
-            known.add(f.name());
+        Set<String> known = fieldNames.computeIfAbsent(type.id(),
+                id -> Set.copyOf(type.fields().stream().map(FieldModel::name).toList()));
         for (Object key : obj.keySet()) {
             if (!known.contains(String.valueOf(key))) {
                 throw new ConversionException(path + "." + key,
@@ -135,13 +161,13 @@ public final class JsonXmlConverter {
                     Object item = list.get(i);
                     if (item == null)
                         throw new ConversionException(fieldPath + "[" + i + "]", "null items are not allowed");
-                    writeElement(out, qn, "", ft, item, fieldPath + "[" + i + "]", prefixes);
+                    writeElement(out, qn, "", ft, item, fieldPath + "[" + i + "]", prefixes, depth + 1);
                 }
             } else if (v == null) {
                 if (!f.optional())
                     throw new ConversionException(fieldPath, "required field is missing");
             } else {
-                writeElement(out, qn, "", ft, v, fieldPath, prefixes);
+                writeElement(out, qn, "", ft, v, fieldPath, prefixes, depth + 1);
             }
         }
     }
@@ -153,8 +179,7 @@ public final class JsonXmlConverter {
             }
             return s;
         }
-        BuiltIn base = type.base() == null ? BuiltIn.STRING : type.base();
-        return switch (base) {
+        return switch (type.baseOrString()) {
             case STRING -> {
                 if (!(v instanceof String s))
                     throw new ConversionException(path, "expected a string, got " + describe(v));
@@ -172,19 +197,24 @@ public final class JsonXmlConverter {
                     yield (String) v;
                 throw new ConversionException(path, "expected a boolean, got " + describe(v));
             }
-            case DATE -> temporal(v, path, DateTimeFormatter.ISO_DATE, "an ISO-8601 date (2024-01-31)");
-            case DATE_TIME ->
-                temporal(v, path, DateTimeFormatter.ISO_DATE_TIME, "an ISO-8601 date-time (2024-01-31T10:15:30Z)");
+            case DATE -> temporal(v, path, "an ISO-8601 date (2024-01-31)", DateTimeFormatter.ISO_DATE);
+            case DATE_TIME -> temporal(v, path, "an ISO-8601 date-time (2024-01-31T10:15:30Z)",
+                    DateTimeFormatter.ISO_LOCAL_DATE_TIME, DateTimeFormatter.ISO_OFFSET_DATE_TIME);
         };
     }
 
     private static String integral(Object v, String path, BigInteger min, BigInteger max, String xsType) {
         BigDecimal d = decimal(v, path);
+        // Cheap pre-check: more than 19 integer digits can never fit a long, and
+        // toBigIntegerExact
+        // would otherwise materialise up to MAX_NUMBER_DIGITS digits.
+        if (d.precision() - d.scale() > 19)
+            throw new ConversionException(path, "number is out of range for " + xsType);
         BigInteger i;
         try {
             i = d.toBigIntegerExact();
         } catch (ArithmeticException e) {
-            throw new ConversionException(path, "expected an integer for " + xsType + ", got " + d.toPlainString());
+            throw new ConversionException(path, "expected an integer for " + xsType + ", got " + quote(d.toString()));
         }
         if (i.compareTo(min) < 0 || i.compareTo(max) > 0) {
             throw new ConversionException(path, i + " is out of range for " + xsType);
@@ -193,54 +223,75 @@ public final class JsonXmlConverter {
     }
 
     private static BigDecimal decimal(Object v, String path) {
+        BigDecimal d;
         try {
-            if (v instanceof BigDecimal d)
-                return d;
-            if (v instanceof BigInteger i)
-                return new BigDecimal(i);
-            if (v instanceof Integer || v instanceof Long || v instanceof Short || v instanceof Byte) {
-                return BigDecimal.valueOf(((Number) v).longValue());
-            }
-            if (v instanceof Double || v instanceof Float) {
-                double d = ((Number) v).doubleValue();
-                if (Double.isNaN(d) || Double.isInfinite(d))
-                    throw new ConversionException(path, "NaN and Infinity are not numbers");
-                return BigDecimal.valueOf(d);
-            }
-            if (v instanceof String s)
-                return new BigDecimal(s.trim());
+            d = switch (v) {
+                case null -> throw new ConversionException(path, "expected a number, got null");
+                case BigDecimal b -> b;
+                case BigInteger i -> new BigDecimal(i);
+                case Integer i -> BigDecimal.valueOf(i);
+                case Long l -> BigDecimal.valueOf(l);
+                case Short s -> BigDecimal.valueOf(s);
+                case Byte b -> BigDecimal.valueOf(b);
+                case Double x -> finite(x, path);
+                case Float x -> finite(x, path);
+                case String s -> new BigDecimal(s.trim());
+                default -> throw new ConversionException(path, "expected a number, got " + describe(v));
+            };
         } catch (NumberFormatException e) {
-            throw new ConversionException(path, "expected a number, got \"" + v + "\"");
+            throw new ConversionException(path, "expected a number, got " + describe(v));
         }
-        throw new ConversionException(path, "expected a number, got " + describe(v));
+        return bounded(d, path);
     }
 
-    private static String temporal(Object v, String path, DateTimeFormatter format, String expected) {
+    private static BigDecimal finite(double d, String path) {
+        if (Double.isNaN(d) || Double.isInfinite(d))
+            throw new ConversionException(path, "NaN and Infinity are not numbers");
+        return BigDecimal.valueOf(d);
+    }
+
+    /**
+     * Requirement 1.8 and 2.10: rejects values whose plain form or arithmetic would
+     * be huge.
+     */
+    private static BigDecimal bounded(BigDecimal d, String path) {
+        if (d.scale() > MAX_NUMBER_DIGITS || d.scale() < -MAX_NUMBER_DIGITS
+                || d.precision() - d.scale() > MAX_NUMBER_DIGITS) {
+            throw new ConversionException(path, "number is too large or too precise (more than "
+                    + MAX_NUMBER_DIGITS + " digits)");
+        }
+        return d;
+    }
+
+    private static String temporal(Object v, String path, String expected, DateTimeFormatter... formats) {
         if (v instanceof String s) {
-            try {
-                format.parse(s);
-                return s;
-            } catch (DateTimeParseException e) {
-                // fall through
+            for (DateTimeFormatter format : formats) {
+                try {
+                    format.parse(s);
+                    return s;
+                } catch (DateTimeParseException e) {
+                    // try the next form
+                }
             }
         }
         throw new ConversionException(path, "expected " + expected + ", got " + describe(v));
     }
 
     private static String describe(Object v) {
-        if (v == null)
-            return "null";
-        if (v instanceof String s)
-            return "string \"" + (s.length() > 40 ? s.substring(0, 40) + "..." : s) + "\"";
-        if (v instanceof Map)
-            return "an object";
-        if (v instanceof List)
-            return "an array";
-        if (v instanceof Boolean)
-            return "boolean " + v;
-        if (v instanceof Number)
-            return "number " + v;
-        return v.getClass().getSimpleName();
+        return switch (v) {
+            case null -> "null";
+            case String s -> "string " + quote(s);
+            case Map<?, ?> m -> "an object";
+            case List<?> l -> "an array";
+            case Boolean b -> "boolean " + b;
+            case Number n -> "number " + quote(n.toString());
+            default -> v.getClass().getSimpleName();
+        };
+    }
+
+    /** At most {@link #QUOTE} characters of a value, quoted. */
+    private static String quote(String s) {
+        return "\"" + (s.length() > QUOTE ? s.substring(0, QUOTE) + "..." : s) + "\"";
     }
 
     // ---------------------------------------------------------------- XML -> JSON
@@ -258,67 +309,71 @@ public final class JsonXmlConverter {
     public Object toJson(ElementRef root, Element element) {
         if (!root.localName().equals(element.getLocalName()) || !root.namespace().equals(nsOf(element))) {
             throw new ConversionException("$", "expected element {" + root.namespace() + "}" + root.localName()
-                    + " but found {" + nsOf(element) + "}" + element.getLocalName());
+                    + " but found an element named " + quote(element.getLocalName()));
         }
-        return read(element, model.type(root.typeId()), "$");
+        return read(element, model.type(root.typeId()), "$", 1);
     }
 
-    private Object read(Element el, TypeModel type, String path) {
+    private Object read(Element el, TypeModel type, String path, int depth) {
+        if (depth > MAX_DEPTH)
+            throw new ConversionException(path, "response nests deeper than " + MAX_DEPTH + " levels");
         if (!type.isComplex())
             return readSimple(el.getTextContent(), type, path);
 
         Map<String, List<Element>> children = new HashMap<>();
         for (Node n = el.getFirstChild(); n != null; n = n.getNextSibling()) {
-            if (n instanceof Element c) {
+            if (n instanceof Element c && !isNil(c)) {
                 children.computeIfAbsent("{" + nsOf(c) + "}" + c.getLocalName(), k -> new ArrayList<>()).add(c);
             }
         }
         Map<String, Object> out = new LinkedHashMap<>();
         for (FieldModel f : type.fields()) {
             List<Element> matches = children.getOrDefault("{" + f.namespace() + "}" + f.name(), List.of());
-            String fieldPath = path + "." + f.name();
             TypeModel ft = model.type(f.typeId());
             if (f.repeated()) {
                 List<Object> items = new ArrayList<>(matches.size());
                 for (int i = 0; i < matches.size(); i++)
-                    items.add(read(matches.get(i), ft, fieldPath + "[" + i + "]"));
+                    items.add(read(matches.get(i), ft, path + "." + f.name() + "[" + i + "]", depth + 1));
                 out.put(f.name(), items);
             } else if (matches.size() > 1) {
-                throw new ConversionException(fieldPath,
+                throw new ConversionException(path + "." + f.name(),
                         "element occurs " + matches.size() + " times but the schema allows one");
             } else if (matches.size() == 1) {
-                out.put(f.name(), read(matches.get(0), ft, fieldPath));
+                out.put(f.name(), read(matches.get(0), ft, path + "." + f.name(), depth + 1));
             }
         }
         return out;
     }
 
+    /**
+     * Requirement 2.9: {@code xsi:nil="true"} (or "1") means the element is absent.
+     */
+    private static boolean isNil(Element e) {
+        String nil = e.getAttributeNS(XSI, "nil").strip();
+        return nil.equals("true") || nil.equals("1");
+    }
+
     private static Object readSimple(String raw, TypeModel type, String path) {
         if (type.isEnum())
             return raw;
-        BuiltIn base = type.base() == null ? BuiltIn.STRING : type.base();
-        if (base == BuiltIn.STRING)
-            return raw;
-        String text = raw.trim();
+        BuiltIn base = type.baseOrString();
+        String text = raw.strip();
         try {
             return switch (base) {
-                case INT -> Integer.valueOf(stripPlus(text));
-                case LONG -> Long.valueOf(stripPlus(text));
-                case DECIMAL -> new BigDecimal(text);
+                case STRING -> raw;
+                case INT -> Integer.valueOf(text);
+                case LONG -> Long.valueOf(text);
+                case DECIMAL -> bounded(new BigDecimal(text), path);
                 case BOOLEAN -> switch (text) {
                     case "true", "1" -> Boolean.TRUE;
                     case "false", "0" -> Boolean.FALSE;
-                    default -> throw new ConversionException(path, "not an xs:boolean: \"" + text + "\"");
+                    default -> throw new ConversionException(path, "not an xs:boolean: " + quote(text));
                 };
-                default -> text; // DATE, DATE_TIME: keep the lexical form
+                case DATE, DATE_TIME -> text; // keep the lexical form
             };
         } catch (NumberFormatException e) {
-            throw new ConversionException(path, "not a valid " + base.typeId() + ": \"" + text + "\"");
+            throw new ConversionException(path, "not a valid " + base.typeId() + ": " + quote(text));
         }
-    }
-
-    private static String stripPlus(String s) {
-        return s.startsWith("+") ? s.substring(1) : s;
     }
 
     private static String nsOf(Element e) {

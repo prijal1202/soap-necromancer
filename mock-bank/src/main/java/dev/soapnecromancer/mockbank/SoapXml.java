@@ -3,6 +3,9 @@ package dev.soapnecromancer.mockbank;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
@@ -10,10 +13,12 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.StringWriter;
 
 /**
@@ -24,12 +29,36 @@ final class SoapXml {
     static final String SOAP_ENV = "http://schemas.xmlsoap.org/soap/envelope/";
     static final String BANK_NS = "urn:example:bank:v1";
 
+    /**
+     * Parser hardening is configured once; factories are thread-safe to use,
+     * builders are not.
+     */
+    private static final DocumentBuilderFactory DOCUMENTS = hardenedFactory();
+    private static final TransformerFactory TRANSFORMERS = transformerFactory();
+    private static final ErrorHandler RETHROW = new ErrorHandler() {
+        public void warning(SAXParseException e) {
+        }
+
+        public void error(SAXParseException e) throws SAXException {
+            throw e;
+        }
+
+        public void fatalError(SAXParseException e) throws SAXException {
+            throw e;
+        }
+    };
+
     private SoapXml() {
     }
 
-    static DocumentBuilder newBuilder() {
+    /**
+     * {@code newDefaultInstance} pins the JDK parser, so a JAXP provider on the
+     * classpath cannot
+     * silently drop these settings.
+     */
+    private static DocumentBuilderFactory hardenedFactory() {
         try {
-            DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+            DocumentBuilderFactory f = DocumentBuilderFactory.newDefaultInstance();
             f.setNamespaceAware(true);
             f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             f.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
@@ -37,21 +66,26 @@ final class SoapXml {
             f.setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
             f.setXIncludeAware(false);
             f.setExpandEntityReferences(false);
-            DocumentBuilder b = f.newDocumentBuilder();
+            return f;
+        } catch (ParserConfigurationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static TransformerFactory transformerFactory() {
+        TransformerFactory tf = TransformerFactory.newDefaultInstance();
+        tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+        return tf;
+    }
+
+    /** A new builder per call: {@link DocumentBuilder} is not thread-safe. */
+    static DocumentBuilder newBuilder() {
+        try {
+            DocumentBuilder b = DOCUMENTS.newDocumentBuilder();
             // Rethrow instead of letting the JDK default handler print "[Fatal Error]" to
             // stderr.
-            b.setErrorHandler(new org.xml.sax.ErrorHandler() {
-                public void warning(org.xml.sax.SAXParseException e) {
-                }
-
-                public void error(org.xml.sax.SAXParseException e) throws org.xml.sax.SAXException {
-                    throw e;
-                }
-
-                public void fatalError(org.xml.sax.SAXParseException e) throws org.xml.sax.SAXException {
-                    throw e;
-                }
-            });
+            b.setErrorHandler(RETHROW);
             return b;
         } catch (ParserConfigurationException e) {
             throw new IllegalStateException(e);
@@ -63,21 +97,21 @@ final class SoapXml {
         Document doc;
         try {
             doc = newBuilder().parse(new ByteArrayInputStream(envelope));
-        } catch (Exception e) {
-            throw new MockBankFault("soap:Client", "Malformed SOAP envelope");
+        } catch (SAXException | IOException e) {
+            throw MockBankFault.sender("Malformed SOAP envelope");
         }
         Element env = doc.getDocumentElement();
         if (!SOAP_ENV.equals(env.getNamespaceURI()) || !"Envelope".equals(env.getLocalName())) {
-            throw new MockBankFault("soap:VersionMismatch", "Expected a SOAP 1.1 Envelope");
+            throw MockBankFault.versionMismatch("Expected a SOAP 1.1 Envelope");
         }
         Element body = firstChild(env, SOAP_ENV, "Body");
         if (body == null)
-            throw new MockBankFault("soap:Client", "Missing soap:Body");
+            throw MockBankFault.sender("Missing soap:Body");
         for (Node n = body.getFirstChild(); n != null; n = n.getNextSibling()) {
             if (n instanceof Element e)
                 return e;
         }
-        throw new MockBankFault("soap:Client", "Empty soap:Body");
+        throw MockBankFault.sender("Empty soap:Body");
     }
 
     static Element firstChild(Element parent, String ns, String local) {
@@ -92,7 +126,7 @@ final class SoapXml {
         Element e = firstChild(parent, BANK_NS, local);
         if (e == null) {
             if (required)
-                throw new MockBankFault("soap:Client", "Missing element: " + local);
+                throw MockBankFault.sender("Missing element: " + local);
             return null;
         }
         return e.getTextContent().trim();
@@ -115,13 +149,13 @@ final class SoapXml {
         return e;
     }
 
-    static String fault(String code, String message) {
+    static String fault(MockBankFault.Code code, String message) {
         Document doc = newBuilder().newDocument();
         Element body = newEnvelopeBody(doc);
         Element fault = doc.createElementNS(SOAP_ENV, "soap:Fault");
         body.appendChild(fault);
         Element fc = doc.createElement("faultcode");
-        fc.setTextContent(code);
+        fc.setTextContent(code.soap11());
         fault.appendChild(fc);
         Element fs = doc.createElement("faultstring");
         fs.setTextContent(message);
@@ -131,15 +165,12 @@ final class SoapXml {
 
     static String serialize(Document doc) {
         try {
-            TransformerFactory tf = TransformerFactory.newInstance();
-            tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
-            tf.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
-            Transformer t = tf.newTransformer();
+            Transformer t = TRANSFORMERS.newTransformer();
             t.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
             StringWriter w = new StringWriter();
             t.transform(new DOMSource(doc), new StreamResult(w));
             return w.toString();
-        } catch (Exception e) {
+        } catch (TransformerException e) {
             throw new IllegalStateException(e);
         }
     }

@@ -7,6 +7,7 @@ export interface Artifact {
   path: string
   text: string
   bytes: number
+  lines: number
 }
 
 export interface ArtifactGroup {
@@ -27,7 +28,10 @@ export function readZip(zip: ArrayBuffer): Artifact[] {
   const utf8 = new TextDecoder('utf-8')
   return Object.entries(entries)
     .filter(([path]) => !path.endsWith('/'))
-    .map(([path, data]) => ({ path, text: utf8.decode(data), bytes: data.length }))
+    .map(([path, data]) => {
+      const text = utf8.decode(data)
+      return { path, text, bytes: data.length, lines: countLines(text) }
+    })
     .sort((a, b) => a.path.localeCompare(b.path))
 }
 
@@ -103,6 +107,13 @@ export function readReport(files: Artifact[]): Report | null {
   } catch {
     return null
   }
+}
+
+/** Counted once per file instead of splitting the whole text on every render. */
+function countLines(text: string): number {
+  let n = 1
+  for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) n++
+  return n
 }
 
 export function formatBytes(bytes: number): string {

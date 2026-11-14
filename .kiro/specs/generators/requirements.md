@@ -52,6 +52,9 @@ endpoint, so that clients use JSON over HTTP and never see SOAP.
 7. The generated proxy SHALL NOT forward the backend's raw error body or stack traces to clients.
 8. The generated proxy SHALL expose `GET /health`.
 9. The SOAP client SHALL be added to `runtime` (JDK `HttpClient`, hardened XML parsing), so it is covered by runtime's dependency budget and copied like the converter.
+10. The SOAP client SHALL bound every call: the read timeout covers the whole exchange including the response body (a backend that sends headers and then trickles the body times out), and a response larger than `soap.max-response-bytes` (default 10 MB) fails as a bad response without being buffered.
+11. The SOAP client SHALL decode the response with the `charset` of its `Content-Type` when one is given (RFC 7303), and SHALL resolve the fault code as a QName, so only the SOAP envelope namespace's `Client` counts as a client fault.
+12. The text of a SOAP fault forwarded to clients (Requirement 2.6) SHALL be truncated to 1024 characters.
 
 ### Requirement 3: Generated tests
 

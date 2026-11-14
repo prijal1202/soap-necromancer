@@ -31,12 +31,13 @@ my request instead of getting a SOAP fault from the legacy backend.
 5. WHEN an optional field is missing or null THEN the converter SHALL write no element for it.
 6. WHEN a repeated field is present THEN its value SHALL be a JSON array whose size is within minOccurs..maxOccurs; otherwise the converter SHALL fail.
 7. WHEN a JSON object has a key that is not a field of its type THEN the converter SHALL fail naming the key.
-8. The converter SHALL accept for numbers either JSON numbers or numeric strings, and for booleans either JSON booleans or `"true"`/`"false"`, and SHALL reject values out of the type's range.
+8. The converter SHALL accept for numbers either JSON numbers or numeric strings, and for booleans either JSON booleans or `"true"`/`"false"`, and SHALL reject values out of the type's range. It SHALL reject, before any arithmetic, numbers with more than 1000 digits before the decimal point or a scale outside -1000..1000: a 13-byte `1e999999999` would otherwise cost about 1 GB to write out.
 9. WHEN an enum value is not one of the declared values THEN the converter SHALL fail and list the allowed values.
-10. WHEN a date or dateTime string is not ISO-8601 THEN the converter SHALL fail.
+10. WHEN a date or dateTime string is not ISO-8601 THEN the converter SHALL fail. A dateTime SHALL be a local or offset date-time; a bracketed zone id (`[Europe/Paris]`, which ISO-8601 parsers accept but xs:dateTime does not) SHALL fail.
 11. The converter SHALL write decimals in plain notation (no exponent).
 12. The converter SHALL escape `&`, `<`, `>` and carriage return in text so the parsed XML has exactly the original string.
 13. WHEN a string contains a character not allowed in XML 1.0 THEN the converter SHALL fail rather than drop or alter it.
+14. WHEN a value nests deeper than 256 levels THEN the converter SHALL fail with a `ConversionException` (recursive types would otherwise recurse without bound).
 
 ### Requirement 2: XML to JSON (responses)
 
@@ -52,7 +53,11 @@ including data from slightly non-conforming backends.
 5. The converter SHALL return repeated fields as lists, empty when no element occurs.
 6. The converter SHALL keep string text exactly, and trim whitespace for all other built-ins.
 7. The converter SHALL accept `1`/`0` as booleans and return enum values that are not declared unchanged.
-8. The converter SHALL parse XML with DOCTYPE disallowed and no external entity resolution.
+8. The converter SHALL parse XML with DOCTYPE disallowed and no external entity resolution, and SHALL fail on elements nested deeper than 256 levels.
+9. WHEN an element carries `xsi:nil="true"` (or `"1"`) THEN the converter SHALL treat it as absent: no key for a single field, no item for a repeated field. Backends built on .NET and Axis send nil for `nillable` elements routinely.
+10. Numbers SHALL obey the bounds of Requirement 1.8; within them, exponent notation is accepted and returned as `BigDecimal`.
+11. Responses are read leniently (2.3): a missing required element is not an error, so data from slightly non-conforming backends still comes through. Only data that cannot be represented fails (2.1, 2.4, 2.8, 2.10).
+12. Error messages SHALL quote at most 40 characters of a value from the XML, so backend text (for example a stack trace inside an element) does not reach clients.
 
 ### Requirement 3: Round-trip guarantees (verified with jqwik)
 

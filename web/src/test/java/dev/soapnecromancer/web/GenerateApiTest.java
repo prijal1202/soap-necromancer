@@ -32,7 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = { "necromancer.max-upload-bytes=65536",
-        "spring.servlet.multipart.max-file-size=65536", "spring.servlet.multipart.max-request-size=65536" })
+        "spring.servlet.multipart.max-file-size=65536", "spring.servlet.multipart.max-request-size=65536",
+        "spring.servlet.multipart.file-size-threshold=65536",
+        "necromancer.rate-limit.generate-per-minute=10000", "necromancer.rate-limit.mock-bank-per-minute=10000" })
 class GenerateApiTest {
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
@@ -323,6 +325,51 @@ class GenerateApiTest {
     @Test
     void wrongMultipartFieldIs400AndWrongMediaTypeIs415() throws Exception {
         assertThat(postMultipart("file", sampleWsdl()).statusCode()).isEqualTo(400);
-        assertThat(postRaw(sampleWsdl(), "application/json").statusCode()).isEqualTo(415);
+        HttpResponse<byte[]> wrongType = postRaw(sampleWsdl(), "application/json");
+        assertThat(wrongType.statusCode()).isEqualTo(415);
+        assertThat(problem(wrongType).get("detail").asText()).contains("multipart/form-data").contains("text/xml");
+    }
+
+    /** A cut-off multipart body used to surface as a 500. */
+    @Test
+    void malformedMultipartIs400() throws Exception {
+        HttpResponse<byte[]> r = postRaw("--b\r\nContent-Disposition: form-data; name=\"wsdl\"\r\n\r\n<x"
+                .getBytes(StandardCharsets.UTF_8), "multipart/form-data; boundary=b");
+        assertThat(r.statusCode()).isEqualTo(400);
+        assertThat(problem(r).get("title").asText()).isEqualTo("Upload rejected");
+    }
+
+    @Test
+    void unknownPathIsProblemJson404() throws Exception {
+        HttpResponse<byte[]> r = HTTP.send(HttpRequest.newBuilder(URI.create(url("/api/nope"))).build(),
+                HttpResponse.BodyHandlers.ofByteArray());
+        assertThat(r.statusCode()).isEqualTo(404);
+    }
+
+    /**
+     * WSDL names are unbounded; response headers must stay within Tomcat's buffer.
+     */
+    @Test
+    void hugeServiceNameStillGivesShortHeaders() throws Exception {
+        String name = "S".repeat(20_000);
+        byte[] wsdl = new String(wsdlWithOperations(1, TREE, "tns:Node"), StandardCharsets.UTF_8)
+                .replace("name=\"Huge\"", "name=\"" + name + "\"").getBytes(StandardCharsets.UTF_8);
+        HttpResponse<byte[]> r = postRaw(wsdl, "text/xml");
+        assertThat(r.statusCode()).isEqualTo(200);
+        assertThat(r.headers().firstValue("X-Generator-Service")).hasValueSatisfying(v -> assertThat(v).hasSize(200));
+        assertThat(r.headers().firstValue("Content-Disposition"))
+                .hasValueSatisfying(v -> assertThat(v.length()).isLessThan(150));
+    }
+
+    @Test
+    void securityHeadersOnTheUiAndTheApi() throws Exception {
+        for (String path : new String[] { "/", "/api/health", "/api/sample-wsdl" }) {
+            HttpResponse<byte[]> r = HTTP.send(HttpRequest.newBuilder(URI.create(url(path))).build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            assertThat(r.headers().firstValue("Content-Security-Policy")).as(path)
+                    .hasValue(SecurityHeadersFilter.CSP);
+            assertThat(r.headers().firstValue("X-Content-Type-Options")).as(path).hasValue("nosniff");
+            assertThat(r.headers().firstValue("X-Frame-Options")).as(path).hasValue("DENY");
+        }
     }
 }

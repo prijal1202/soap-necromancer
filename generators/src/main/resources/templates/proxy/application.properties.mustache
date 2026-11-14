@@ -3,8 +3,13 @@ server.port=${PORT:8080}
 soap.endpoint=${SOAP_ENDPOINT:{{endpointProperty}}}
 soap.connect-timeout=${SOAP_CONNECT_TIMEOUT:5s}
 soap.read-timeout=${SOAP_READ_TIMEOUT:30s}
+soap.max-response-bytes=${SOAP_MAX_RESPONSE_BYTES:10485760}
 
 # Decimals never pass through double (generators spec, Requirement 6.1).
 spring.jackson.deserialization.use-big-decimal-for-floats=true
 spring.jackson.deserialization.fail-on-trailing-tokens=true
 spring.jackson.generator.write-bigdecimal-as-plain=true
+# {"amount":1,"amount":1000} is an error, not "last one wins".
+spring.jackson.parser.strict-duplicate-detection=true
+# Not spring.mvc.problemdetails.enabled: Boot's handler would take over invalid-JSON errors and drop
+# the "path" property. ProblemHandler answers Spring MVC's own errors (404, 405, 415) as problem+json.

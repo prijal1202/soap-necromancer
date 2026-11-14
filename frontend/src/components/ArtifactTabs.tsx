@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from 'react'
-import { formatBytes, type ArtifactGroup } from '../artifacts.ts'
+import { formatBytes, type Artifact, type ArtifactGroup } from '../artifacts.ts'
 
 interface Props {
   groups: ArtifactGroup[]
@@ -15,11 +15,17 @@ export function ArtifactTabs({ groups }: Props) {
   const path = selected[group.id] ?? group.files[0]?.path
   const file = group.files.find((f) => f.path === path) ?? group.files[0]
 
+  /** WAI-ARIA tabs pattern: arrows move between tabs (wrapping), Home and End jump to the ends. */
   function onTabKey(e: KeyboardEvent) {
-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
-    if (step === 0) return
+    const last = groups.length - 1
+    const next =
+      e.key === 'ArrowRight' ? (active === last ? 0 : active + 1)
+      : e.key === 'ArrowLeft' ? (active === 0 ? last : active - 1)
+      : e.key === 'Home' ? 0
+      : e.key === 'End' ? last
+      : -1
+    if (next < 0) return
     e.preventDefault()
-    const next = (active + step + groups.length) % groups.length
     setActive(next)
     document.getElementById(`tab-${groups[next]!.id}`)?.focus()
   }
@@ -34,7 +40,7 @@ export function ArtifactTabs({ groups }: Props) {
             role="tab"
             type="button"
             aria-selected={i === active}
-            aria-controls={`panel-${g.id}`}
+            aria-controls={i === active ? `panel-${g.id}` : undefined}
             tabIndex={i === active ? 0 : -1}
             onClick={() => setActive(i)}
           >
@@ -67,35 +73,43 @@ export function ArtifactTabs({ groups }: Props) {
               })}
             </ul>
           )}
-          {file && <Viewer path={file.path} text={file.text} bytes={file.bytes} />}
+          {file && <Viewer file={file} />}
         </div>
       </div>
     </div>
   )
 }
 
-function Viewer({ path, text, bytes }: { path: string; text: string; bytes: number }) {
-  const [copied, setCopied] = useState<string | null>(null)
+type CopyState = { path: string; ok: boolean } | null
+
+function Viewer({ file }: { file: Artifact }) {
+  const [copy, setCopy] = useState<CopyState>(null)
+  const label = copy?.path !== file.path ? 'Copy' : copy.ok ? 'Copied' : 'Copy failed'
+
+  async function copyText() {
+    try {
+      // Rejects when clipboard permission is denied or the page is not focused.
+      await navigator.clipboard.writeText(file.text)
+      setCopy({ path: file.path, ok: true })
+    } catch {
+      setCopy({ path: file.path, ok: false })
+    }
+  }
+
   return (
     <figure className="viewer">
       <figcaption>
-        <code>{path}</code>
+        <code>{file.path}</code>
         <span className="meta">
-          {formatBytes(bytes)} · {text.split('\n').length} lines
+          {formatBytes(file.bytes)} · {file.lines} lines
         </span>
-        <button
-          type="button"
-          className="secondary small"
-          onClick={() => {
-            void navigator.clipboard?.writeText(text).then(() => setCopied(path))
-          }}
-        >
-          {copied === path ? 'Copied' : 'Copy'}
+        <button type="button" className="secondary small" onClick={() => void copyText()}>
+          {label}
         </button>
       </figcaption>
       {/* Plain text on purpose: README and Java comments carry text from the uploaded WSDL. */}
       <pre>
-        <code>{text}</code>
+        <code>{file.text}</code>
       </pre>
     </figure>
   )

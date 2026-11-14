@@ -92,3 +92,35 @@ server, `GeneratedProjectIT.mcpTransferKeepsEveryDigit` failed. The agent asked 
    the Dockerfile plus a C1-only JIT brought it to about 23 s (two runs), with a lower memory peak.
    Spring lazy init was measured too and dropped: no gain, and it would let a broken bean pass the
    health check. Numbers and method: `docs/decisions.md` section 3.4.
+
+## Production review (after Task 11)
+
+A whole-repo review, run as four parallel read-only reviews (runtime, core, generators,
+web/mock-bank/frontend), produced a ranked list; every High and Medium finding was fixed with a
+regression test first. The ones worth telling:
+
+10. **A 13-byte number could kill the public demo.** `1E+300000000` as a transfer amount made
+    `BigDecimal.subtract` rescale the balance by 10^300000000 while holding the ledger lock: an OOM,
+    and with `ExitOnOutOfMemoryError` a dead JVM. The same trick (`1e999999999`) hit every generated
+    proxy through the converter (`toPlainString` and `toBigIntegerExact` build about 1 GB). Fixed by
+    checking digits and scale before any arithmetic (converter Requirement 1.8); the tests time out
+    after 2 s if it regresses.
+11. **The SSRF fix had a second door.** The parser stripped the first `wsdl:types` before handing the
+    document to WSDL4J, but WSDL4J parses every `wsdl:types` element and fetches their imports. A
+    second, empty-looking block reopened the fetch. Now every block is stripped and a locator that
+    refuses all imports sits behind it; the canary test puts the payload in the second block.
+12. **Prompt injection through the WSDL.** WSDL `documentation` went verbatim into MCP tool
+    descriptions, which the agent reads as guidance, in a demo where the agent moves money. Tool
+    descriptions now lead with the generator's own sentence and quote the WSDL text as bounded data,
+    stripped of bidi and control characters.
+13. **Names are code.** Operation names became Spring route patterns (`{id}`, `**`), OpenAPI paths and
+    `URI.create` arguments. The parser now admits only `[A-Za-z_][A-Za-z0-9_.-]*` (Requirement 2.17);
+    element names must be XML names, so they cannot inject markup into the SOAP request.
+14. **Smaller, real bugs found by writing the test first:** `"a---b".replace("--", "- -")` still
+    contains `--` (a WSDL name could make the generated pom.xml unparseable); WSDL4J keeps ports in a
+    HashMap, so "the first port" depended on names; a backend sending headers and then trickling its
+    body held a proxy thread forever (the JDK client's request timeout stops at the headers).
+15. **A fix that broke something, caught by `GeneratedProjectIT`.** Enabling Spring Boot's
+    problem-details support in the generated proxy made Boot's handler win over the generated one for
+    invalid JSON, silently dropping the `path` property. Only the end-to-end test against a real
+    built proxy noticed.

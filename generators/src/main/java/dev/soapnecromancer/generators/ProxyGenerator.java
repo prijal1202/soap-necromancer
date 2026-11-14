@@ -38,7 +38,8 @@ public final class ProxyGenerator {
         Map<String, Object> ctx = new HashMap<>();
         ctx.put("package", pkg);
         ctx.put("serviceNameDoc", Escapes.javaComment(model.name()));
-        ctx.put("serviceNameXml", Escapes.xmlText(model.name()));
+        ctx.put("serviceNameXmlComment", Escapes.xmlComment(model.name()));
+        ctx.put("serviceNamePom", Escapes.pomText(model.name()));
         ctx.put("artifactId", artifactId(model));
         ctx.put("generatorVersion", Versions.GENERATOR);
         ctx.put("springBootVersion", Versions.SPRING_BOOT);
@@ -76,11 +77,13 @@ public final class ProxyGenerator {
      */
     public static String defaultEndpoint(ServiceModel model) {
         String url = model.endpointUrl();
-        if (url == null || !url.matches("https?://[A-Za-z0-9._~:/?#\\[\\]@!&'()*+,;=%-]+"))
+        if (url == null || url.length() > 2048 || !url.matches("https?://[A-Za-z0-9._~:/?#\\[\\]@!&'()*+,;=%-]+"))
             return null;
         try {
             java.net.URI uri = java.net.URI.create(url);
-            return uri.getHost() == null ? null : url;
+            // Credentials in the address (user:pass@host) must not be copied into generated
+            // files.
+            return uri.getHost() == null || uri.getRawUserInfo() != null ? null : url;
         } catch (IllegalArgumentException e) {
             return null;
         }
@@ -100,13 +103,8 @@ public final class ProxyGenerator {
         for (String fixed : FIXED_CLASSES)
             used.add(fixed.toLowerCase(Locale.ROOT));
         List<Controller> out = new ArrayList<>();
-        for (OperationModel op : model.operations()) {
-            String base = Names.javaClass(op.name(), "Controller");
-            String name = base;
-            for (int i = 2; !used.add(name.toLowerCase(Locale.ROOT)); i++)
-                name = base + i;
-            out.add(new Controller(op, name));
-        }
+        for (OperationModel op : model.operations())
+            out.add(new Controller(op, Names.uniquify(Names.javaClass(op.name(), "Controller"), "", used, true)));
         return out;
     }
 }

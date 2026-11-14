@@ -7,9 +7,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -21,6 +25,7 @@ public final class GeneratedFiles {
     static final LocalDateTime ZIP_TIME = LocalDateTime.of(2026, 1, 1, 0, 0);
 
     private final Map<String, byte[]> files = new LinkedHashMap<>();
+    private final Set<String> lowerCasePaths = new HashSet<>();
     private final long maxTotalBytes;
     private long totalBytes;
 
@@ -45,19 +50,40 @@ public final class GeneratedFiles {
         add(path, text.replace("\r\n", "\n").getBytes(StandardCharsets.UTF_8));
     }
 
+    /**
+     * The zip boundary is the last line of defence, whatever the callers sanitized:
+     * plain relative
+     * paths of portable segments only, never a Windows device name, never two paths
+     * that differ
+     * only in case (they would overwrite each other when extracted on Windows or
+     * macOS).
+     */
     public void add(String path, byte[] content) {
-        if (path.isEmpty() || path.startsWith("/") || path.contains("\\") || path.contains("//")
-                || List.of(path.split("/")).stream().anyMatch(p -> p.equals("..") || p.equals("."))) {
+        if (!isPortablePath(path)) {
             throw new IllegalArgumentException("unsafe generated path: " + path);
         }
         if (totalBytes + content.length > maxTotalBytes) {
             throw new GenerationLimitException("LIMIT_OUTPUT", "The generated project would exceed "
                     + maxTotalBytes + " bytes (at " + path + ")");
         }
-        if (files.putIfAbsent(path, content.clone()) != null) {
-            throw new IllegalStateException("generated path written twice: " + path);
+        if (!lowerCasePaths.add(path.toLowerCase(Locale.ROOT)) || files.putIfAbsent(path, content) != null) {
+            throw new IllegalStateException("generated path written twice (ignoring case): " + path);
         }
         totalBytes += content.length;
+    }
+
+    private static final Pattern SEGMENT = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9._-]{0,99}");
+    private static final Pattern WINDOWS_DEVICE = Pattern.compile("(?i)(con|prn|aux|nul|com[0-9]|lpt[0-9])(\\..*)?");
+
+    static boolean isPortablePath(String path) {
+        if (path.isEmpty() || path.length() > 240)
+            return false;
+        for (String segment : path.split("/", -1)) {
+            if (!SEGMENT.matcher(segment).matches() || segment.endsWith(".") || segment.contains("..")
+                    || WINDOWS_DEVICE.matcher(segment).matches())
+                return false;
+        }
+        return true;
     }
 
     public Map<String, byte[]> files() {

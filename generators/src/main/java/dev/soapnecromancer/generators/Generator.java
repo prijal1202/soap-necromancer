@@ -69,18 +69,24 @@ public final class Generator {
         ctx.put("mcpArtifactId", McpServerGenerator.artifactId(model));
         String endpoint = ProxyGenerator.defaultEndpoint(model);
         ctx.put("endpointDisplay", endpoint == null ? "(none usable in the WSDL: set SOAP_ENDPOINT)" : endpoint);
+        // Operation names are restricted by the parser (parser Requirement 2.17), so
+        // they are safe
+        // inside the README's code fence as they are; the parser also guarantees one
+        // operation.
         ctx.put("firstOperation", model.operations().get(0).name());
         List<Map<String, String>> ops = new ArrayList<>();
         for (OperationModel op : model.operations()) {
             Map<String, String> o = new HashMap<>();
-            o.put("name", Escapes.markdown(op.name()));
-            o.put("doc", Escapes.markdown(op.documentation()));
+            o.put("name", Escapes.markdownCode(op.name()));
+            // null, not "": an empty string still opens a Mustache section and leaves a
+            // dangling ": ".
+            o.put("doc", op.documentation().isBlank() ? null : Escapes.markdown(op.documentation()));
             ops.add(o);
         }
         ctx.put("operations", ops);
         List<Map<String, String>> ws = new ArrayList<>();
         for (Warning w : warnings) {
-            ws.add(Map.of("code", w.code(), "location", Escapes.markdown(w.location()), "message",
+            ws.add(Map.of("code", w.code(), "location", Escapes.markdownCode(w.location()), "message",
                     Escapes.markdown(w.message())));
         }
         ctx.put("warnings", ws);

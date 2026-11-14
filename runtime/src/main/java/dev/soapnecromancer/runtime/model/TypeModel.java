@@ -3,12 +3,16 @@ package dev.soapnecromancer.runtime.model;
 import java.util.List;
 
 /**
- * A complex type (ordered fields) or a simple type (built-in base, optional enum values).
- * One record with a {@link Kind} keeps runtime free of JSON annotations and keeps templates simple.
+ * A complex type (ordered fields) or a simple type (built-in base, optional
+ * enum values).
+ * One record with a {@link Kind} keeps runtime free of JSON annotations and
+ * keeps templates simple.
  */
 public record TypeModel(String id, Kind kind, BuiltIn base, List<String> enumValues, List<FieldModel> fields) {
 
-    public enum Kind { COMPLEX, SIMPLE }
+    public enum Kind {
+        COMPLEX, SIMPLE
+    }
 
     public TypeModel {
         enumValues = enumValues == null ? List.of() : List.copyOf(enumValues);
@@ -33,5 +37,13 @@ public record TypeModel(String id, Kind kind, BuiltIn base, List<String> enumVal
 
     public boolean isEnum() {
         return kind == Kind.SIMPLE && !enumValues.isEmpty();
+    }
+
+    /**
+     * The built-in a simple value is read and written as; string when the model
+     * names none.
+     */
+    public BuiltIn baseOrString() {
+        return base == null ? BuiltIn.STRING : base;
     }
 }

@@ -1,14 +1,32 @@
 package dev.soapnecromancer.runtime;
 
-/** The SOAP endpoint answered with a SOAP 1.1 Fault. */
+/**
+ * The SOAP endpoint answered with a SOAP Fault. Whether the caller is to blame
+ * is decided by
+ * {@link SoapClient}, which resolves the fault code as a QName against the
+ * envelope namespace.
+ */
 public class SoapFaultException extends RuntimeException {
+    /**
+     * Generators Requirement 2.12: backend text forwarded to clients is bounded.
+     */
+    public static final int MAX_FAULT_STRING = 1024;
+
     private final String faultCode;
     private final String faultString;
+    private final boolean clientFault;
 
-    public SoapFaultException(String faultCode, String faultString) {
-        super(faultCode + ": " + faultString);
-        this.faultCode = faultCode == null ? "" : faultCode;
-        this.faultString = faultString == null ? "" : faultString;
+    public SoapFaultException(String faultCode, String faultString, boolean clientFault) {
+        super(normalize(faultCode, 256) + ": " + normalize(faultString, MAX_FAULT_STRING));
+        this.faultCode = normalize(faultCode, 256);
+        this.faultString = normalize(faultString, MAX_FAULT_STRING);
+        this.clientFault = clientFault;
+    }
+
+    private static String normalize(String s, int max) {
+        if (s == null)
+            return "";
+        return s.length() <= max ? s : s.substring(0, max) + "...";
     }
 
     public String faultCode() {
@@ -19,9 +37,11 @@ public class SoapFaultException extends RuntimeException {
         return faultString;
     }
 
-    /** {@code Client} or {@code Client.*} faultcode (any prefix): the caller's request was rejected. */
+    /**
+     * The caller's request was rejected (SOAP 1.1 {@code Client}): the generated
+     * proxy answers 400.
+     */
     public boolean isClientFault() {
-        String local = faultCode.substring(faultCode.indexOf(':') + 1);
-        return local.equals("Client") || local.startsWith("Client.");
+        return clientFault;
     }
 }

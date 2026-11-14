@@ -5,9 +5,13 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 
 import java.time.Duration;
 
-/** SOAP endpoint settings. Set SOAP_ENDPOINT, SOAP_CONNECT_TIMEOUT and SOAP_READ_TIMEOUT to override. */
+/**
+ * SOAP endpoint settings. Set SOAP_ENDPOINT, SOAP_CONNECT_TIMEOUT, SOAP_READ_TIMEOUT and
+ * SOAP_MAX_RESPONSE_BYTES to override. The read timeout covers the whole response, body included.
+ */
 @ConfigurationProperties("soap")
 public record SoapProperties(String endpoint,
                              @DefaultValue("5s") Duration connectTimeout,
-                             @DefaultValue("30s") Duration readTimeout) {
+                             @DefaultValue("30s") Duration readTimeout,
+                             @DefaultValue("10485760") int maxResponseBytes) {
 }

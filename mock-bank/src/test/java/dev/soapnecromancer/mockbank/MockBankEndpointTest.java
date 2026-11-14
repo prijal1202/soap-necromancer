@@ -8,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -100,6 +101,63 @@ class MockBankEndpointTest {
                 soap("<b:GetBalanceRequest><b:accountId>NOPE</b:accountId></b:GetBalanceRequest>")
                                 .andExpect(status().isInternalServerError())
                                 .andExpect(xpath("//faultstring").string("Unknown account: NOPE"));
+        }
+
+        /**
+         * 1E+300000000 used to make BigDecimal build a billion-digit number while
+         * holding the ledger lock.
+         */
+        @Test
+        void exponentAmountIsAClientFaultAndCostsNothing() throws Exception {
+                long start = System.nanoTime();
+                soap("""
+                                <b:TransferRequest><b:fromAccountId>ACC-1002</b:fromAccountId><b:toAccountId>ACC-2001</b:toAccountId>
+                                <b:amount>1E+300000000</b:amount></b:TransferRequest>""")
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(xpath("//faultcode").string("soap:Client"))
+                                .andExpect(xpath("//faultstring").string("amount is not a valid xs:decimal"));
+                assertThat(System.nanoTime() - start).isLessThan(2_000_000_000L);
+                assertThat(ledger.account("ACC-2001").balance()).isEqualByComparingTo("0");
+        }
+
+        @Test
+        void amountWithTooManyDigitsIsAClientFault() throws Exception {
+                soap("""
+                                <b:TransferRequest><b:fromAccountId>ACC-1002</b:fromAccountId><b:toAccountId>ACC-2001</b:toAccountId>
+                                <b:amount>1.%s</b:amount></b:TransferRequest>"""
+                                .formatted("1".repeat(19)))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(xpath("//faultcode").string("soap:Client"))
+                                .andExpect(xpath("//faultstring").string(containsString("at most 18 digits")));
+        }
+
+        @Test
+        void overlongMemoIsAClientFault() throws Exception {
+                soap("""
+                                <b:TransferRequest><b:fromAccountId>ACC-1001</b:fromAccountId><b:toAccountId>ACC-2001</b:toAccountId>
+                                <b:amount>1</b:amount><b:memo>%s</b:memo></b:TransferRequest>"""
+                                .formatted("m".repeat(141)))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(xpath("//faultstring").string(containsString("memo is longer than 140")));
+                assertThat(ledger.account("ACC-2001").balance()).isEqualByComparingTo("0");
+        }
+
+        @Test
+        void oversizedEnvelopeIsAClientFault() throws Exception {
+                String big = "<b:GetBalanceRequest><b:accountId>ACC-1001</b:accountId></b:GetBalanceRequest>"
+                                + "<!--" + "x".repeat(MockBankEndpoint.MAX_ENVELOPE_BYTES) + "-->";
+                soap(big)
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(xpath("//faultcode").string("soap:Client"))
+                                .andExpect(xpath("//faultstring").string(containsString("larger than")));
+        }
+
+        @Test
+        void emptyBodyIsASoapFaultNotAJsonError() throws Exception {
+                mvc.perform(post(MockBankEndpoint.PATH).contentType("text/xml"))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(content().contentTypeCompatibleWith("text/xml"))
+                                .andExpect(xpath("//faultcode").string("soap:Client"));
         }
 
         @Test

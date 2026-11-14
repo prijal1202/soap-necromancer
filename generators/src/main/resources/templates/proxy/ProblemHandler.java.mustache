@@ -7,7 +7,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -52,5 +54,18 @@ class ProblemHandler {
         ProblemDetail p = ProblemDetail.forStatusAndDetail(status, e.getMessage());
         p.setTitle(e.kind() == SoapTransportException.Kind.TIMEOUT ? "SOAP endpoint timed out" : "SOAP endpoint error");
         return p;
+    }
+
+    /** Anything unexpected: logged, answered with a fixed message (Requirement 2.7: no stack traces). */
+    @ExceptionHandler(Exception.class)
+    ResponseEntity<ProblemDetail> unexpected(Exception e) {
+        if (e instanceof ErrorResponse er) {
+            return ResponseEntity.status(er.getStatusCode()).headers(er.getHeaders()).body(er.getBody());
+        }
+        log.error("unexpected error", e);
+        ProblemDetail p = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                "The generated proxy failed unexpectedly. The error was logged.");
+        p.setTitle("Internal error");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(p);
     }
 }

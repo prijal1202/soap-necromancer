@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "necromancer.max-output-bytes=50000",
         "necromancer.max-concurrent=1",
         "necromancer.queue-wait=300ms",
+        "necromancer.rate-limit.generate-per-minute=10000",
         "mockbank.public-base-url=https://necro.example.com" })
 class GenerateApiConfigTest {
     private static final HttpClient HTTP = HttpClient.newHttpClient();
@@ -103,7 +104,8 @@ class GenerateApiConfigTest {
     void mockBankResetIsReachableInTheWebApp() throws Exception {
         HttpResponse<String> r = HTTP
                 .send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/mock-bank/reset"))
-                        .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+                        .header("Content-Type", "application/json")
+                        .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
         assertThat(r.statusCode()).isEqualTo(200);
         assertThat(r.body()).contains("ACC-1001");
     }

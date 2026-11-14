@@ -33,7 +33,8 @@ export async function generate(wsdl: File): Promise<GenerateOutcome> {
   return {
     kind: 'problem',
     problem: await readProblem(res),
-    retryAfterSeconds: res.status === 503 ? retryAfter(res.headers.get('Retry-After')) : null,
+    retryAfterSeconds:
+      res.status === 503 || res.status === 429 ? retryAfter(res.headers.get('Retry-After')) : null,
   }
 }
 
@@ -89,11 +90,20 @@ export function parseWarnings(value: unknown): Warning[] {
   }))
 }
 
+/** RFC 6266: prefer the encoded `filename*=UTF-8''...` form; a plain `filename=` is not percent-decoded. */
 function filenameFrom(disposition: string | null): string {
-  const match = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
-  const name = match?.[1] ? decodeURIComponent(match[1]) : ''
-  // The server builds the name from the service name; still strip anything path-like.
-  const safe = name.replace(/[\\/:*?"<>|]/g, '_').trim()
+  let name = ''
+  const encoded = disposition?.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)?.[1]
+  if (encoded) {
+    try {
+      name = decodeURIComponent(encoded.trim())
+    } catch {
+      name = ''
+    }
+  }
+  if (!name) name = disposition?.match(/filename\s*=\s*"?([^";]+)"?/i)?.[1] ?? ''
+  // The server builds the name from the service name; still strip anything path-like or invisible.
+  const safe = name.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '_').trim()
   return safe.endsWith('.zip') ? safe : 'resurrected.zip'
 }
 

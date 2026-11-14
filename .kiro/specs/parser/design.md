@@ -31,15 +31,21 @@ before recursing, so recursive types terminate.
 ## Pipeline
 
 1. `SecureXml.parse(bytes)`: namespace-aware DOM, DOCTYPE disallowed, no external access.
-2. `WSDLReader.readWSDL(null, document)` with `importDocuments=false`. `wsdl:import` -> `EXTERNAL_IMPORT`.
+2. `WSDLReader.readWSDL(refusingLocator, definitions)` with `importDocuments=false`, on a copy with
+   every `wsdl:types` removed (WSDL4J would otherwise fetch `xs:import` locations inside them). The
+   locator answers every import with "not available", as a second guard. `wsdl:import` ->
+   `EXTERNAL_IMPORT`.
 3. DOM scan for WS-Policy / WS-Security namespaces -> `WS_SECURITY`.
 4. XmlSchema: every inline `xs:schema` element is read into one `XmlSchemaCollection` with a
    resolver that never fetches. It returns an empty schema and records `EXTERNAL_IMPORT`.
-5. Pick ports: first service order, SOAP 1.1 only. Without services, fall back to SOAP 1.1
-   bindings with `endpointUrl = null` (`NO_ADDRESS`).
-6. For each binding operation: style, use, parts, header and output checks, then resolve
-   input and output elements to types.
-7. Fatal (`WsdlParseException`) when zero operations remain.
+5. Pick one port, walking `wsdl:service` / `wsdl:port` in document order (WSDL4J's own maps are
+   hash-ordered): the first SOAP 1.1 port wins; the others are reported. Without one, fall back to
+   the first SOAP 1.1 binding in document order, `endpointUrl = null` (`NO_ADDRESS`). Exactly one
+   binding is used, so operations are never merged across bindings.
+6. For each binding operation: name, duplicate, style, use, body parts, header and output checks,
+   then resolve input and output elements to types.
+7. Fatal (`WsdlParseException`) when zero operations remain. Any other exception from WSDL4J or
+   XmlSchema is wrapped in `WsdlParseException` too, so the web layer answers 422, never 500.
 
 ## Warnings
 
