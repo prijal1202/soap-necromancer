@@ -61,8 +61,7 @@ class ApiErrors {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ResponseEntity<ProblemDetail> tooLarge(MaxUploadSizeExceededException e) {
-        return problem(HttpStatus.PAYLOAD_TOO_LARGE, "Upload rejected",
-                "The upload is larger than " + maxUploadBytes + " bytes.");
+        return badUpload(BadUpload.tooLarge(maxUploadBytes));
     }
 
     /**

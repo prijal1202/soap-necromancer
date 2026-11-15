@@ -161,8 +161,7 @@ public class GenerateController {
     private byte[] readCapped(InputStream in) throws IOException {
         byte[] data = in.readNBytes(maxUploadBytes + 1);
         if (data.length > maxUploadBytes) {
-            throw new BadUpload(HttpStatus.PAYLOAD_TOO_LARGE,
-                    "The upload is larger than " + maxUploadBytes + " bytes.");
+            throw BadUpload.tooLarge(maxUploadBytes);
         }
         return data;
     }

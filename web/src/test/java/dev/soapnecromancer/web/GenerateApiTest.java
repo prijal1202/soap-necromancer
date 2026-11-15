@@ -368,13 +368,14 @@ class GenerateApiTest {
     void oversizedRawBodyIs413() throws Exception {
         HttpResponse<byte[]> r = postRaw(new byte[65537], "text/xml");
         assertThat(r.statusCode()).isEqualTo(413);
-        assertThat(problem(r).get("detail").asText()).contains("65536");
+        assertThat(problem(r).get("detail").asText()).isEqualTo("The upload is larger than the 64 KB limit.");
     }
 
     @Test
     void oversizedMultipartIs413() throws Exception {
         HttpResponse<byte[]> r = postMultipart("wsdl", new byte[70_000]);
         assertThat(r.statusCode()).isEqualTo(413);
+        assertThat(problem(r).get("detail").asText()).isEqualTo("The upload is larger than the 64 KB limit.");
     }
 
     @Test
