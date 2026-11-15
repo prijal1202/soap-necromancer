@@ -107,6 +107,23 @@ One decision per topic. Spike code lives in `spikes/` and is not part of the Mav
   Desktop while the container kept running, which ended a measurement with "healthy=false". The
   harness now runs detached and polls `docker inspect`.
 
+### 3.5 Deploy check after SOAP 1.2 (Task 12). PASS, cold start on Render not measured
+
+- Image built from `main` (`125e1fa`), run with `--memory 512m --memory-swap 512m --cpus 0.1`:
+  healthy 20.6 s after `docker run` (Spring "Started in" 16.4 s), 91 MiB used, no OOM kill. Both
+  samples (`/api/sample-wsdl` and `?soap=1.2`) generate with 200 and 0 warnings: 2.6 s for the
+  first, 0.5 s for the second. The in-container mock-bank answers GetBalance over SOAP 1.1
+  (`text/xml`) and SOAP 1.2 (`application/soap+xml`). The CSP header is served.
+- Live site: both samples advertise the live host (`/mock-bank/ws`, `/mock-bank/ws12`) and generate
+  with 200 in 1.8 s and 0.7 s. GetBalance over both SOAP versions returns the seeded `2500.00`.
+- Cold start: a probe idled 17 minutes, then timed `/api/health`. The first request took 0.53 s, so
+  the instance had not spun down. Something reached it during the idle window, or Render kept it up;
+  the logs cannot tell which. The Render cold start is therefore still unmeasured; the container
+  figure above plus Render's own spin-up (Render quotes about a minute) is the estimate.
+- Keep-alive finding: the GitHub `*/10` schedule actually ran 7 times in about 32 hours, 3.5 to 6.5
+  hours apart (GitHub API, runs 3-9). It does not keep the instance warm. An external monitor that
+  pings `/api/health` every 5 minutes is needed for judging.
+
 ## 4. OpenAPI: emit YAML directly from the canonical model. DECIDED
 
 - Decision: a small hand-written YAML emitter in `generators`. `io.swagger.parser.v3:swagger-parser:2.1.48`

@@ -137,8 +137,9 @@ about 23 s (versus 65-86 s for the plain jar), and peaks under 115 MB.
 
 Render spins a free service down after 15 minutes idle. `.github/workflows/keep-alive.yml` pings
 `/api/health` every 10 minutes once the repository variable `RENDER_URL` is set. One always-on free
-service fits Render's 750 free instance hours a month; GitHub can delay scheduled runs, so an
-occasional cold start is still possible.
+service fits Render's 750 free instance hours a month. In practice GitHub ran this schedule only
+every 3.5 to 6.5 hours, so it does not prevent cold starts; use an external monitor (for example
+UptimeRobot or cron-job.org) that pings `/api/health` every 5 minutes.
 
 ## Pointing at a real SOAP endpoint
 
