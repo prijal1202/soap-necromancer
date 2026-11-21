@@ -1,6 +1,7 @@
-# Product: SOAP Necromancer
+# Product: WSDLForge
 
-SOAP Necromancer resurrects legacy SOAP services for REST clients and AI agents.
+WSDLForge reforges legacy SOAP services for REST clients and AI agents (formerly SOAP Necromancer;
+the Java packages keep the old `dev.soapnecromancer` name).
 Kiroween 2026, category: Resurrection.
 
 ## Terminology (use everywhere: specs, code comments, README, tasks)
@@ -27,7 +28,8 @@ and produces, as one in-memory zip:
   SOAP 1.1 port is used.
 - Unsupported (shown as warnings in the UI): rpc/encoded, WS-Security, WS-Addressing.
 - XSD core subset: simple/complex types, sequences, minOccurs/maxOccurs, enums,
-  string/int/decimal/boolean/date/dateTime, one target namespace, simple imports.
+  string/int/long/integer/decimal/boolean/date/dateTime (narrower integers widened),
+  `complexContent` extension (flattened), one target namespace, simple imports.
   Anything else yields a warning with a location.
 - Stretch only: `xs:choice`, attributes.
 - Future work (README only): Basic auth, header pass-through.

@@ -1,16 +1,19 @@
 :root {
-  --bg: #0e0b16;
-  --panel: #17121f;
-  --panel-2: #1f1829;
-  --border: #2e2540;
-  --text: #ece8f4;
-  --muted: #a69cb8;
-  --accent: #b8f5c8; /* ectoplasm */
-  --accent-strong: #6ee7a0;
-  --violet: #c4b5fd;
-  --warn: #fcd34d;
-  --danger: #fca5a5;
-  --radius: 10px;
+  --bg: #120d0a; /* soot */
+  --panel: #1c1511;
+  --panel-2: #261c16;
+  --border: #3d2c22;
+  --text: #f6ece4;
+  --muted: #c2ab9b;
+  --ember: #ff7a2f;
+  --ember-hot: #ffb347;
+  --ember-glow: rgba(255, 122, 47, 0.35);
+  --steel: #c9d4e0;
+  --steel-dark: #8a99ab;
+  --warn: #ffd166;
+  --danger: #ff8a7a;
+  --ok: #9be29b;
+  --radius: 12px;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
   color-scheme: dark;
   font-family:
@@ -31,28 +34,36 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(
-      1100px 500px at 15% -10%,
-      rgba(196, 181, 253, 0.12),
-      transparent 60%
+      900px 420px at 50% 112%,
+      rgba(255, 122, 47, 0.22),
+      transparent 70%
     ),
     radial-gradient(
-      900px 400px at 100% 0%,
-      rgba(110, 231, 160, 0.08),
+      1000px 480px at 10% -15%,
+      rgba(255, 179, 71, 0.1),
       transparent 60%
     ),
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.012) 0 2px,
+      transparent 2px 9px
+    ),
     var(--bg);
+  background-attachment: fixed;
 }
 
 #root {
+  position: relative;
   max-width: 1180px;
   margin: 0 auto;
   padding: 32px 20px 48px;
 }
 
 a {
-  color: var(--accent);
+  color: var(--ember-hot);
 }
 
 code {
@@ -66,24 +77,89 @@ h3 {
   line-height: 1.2;
 }
 
+/* ---- embers drifting up from the bottom of the page ---- */
+.embers {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.embers span {
+  position: absolute;
+  bottom: -12px;
+  left: calc(var(--i) * 7.3% + 2%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ember-hot);
+  box-shadow: 0 0 8px 2px var(--ember-glow);
+  opacity: 0;
+  animation: rise calc(7s + var(--i) * 0.45s) linear infinite;
+  animation-delay: calc(var(--i) * -0.9s);
+}
+
+@keyframes rise {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(calc((var(--i) - 7) * 6px), -105vh) scale(0.3);
+    opacity: 0;
+  }
+}
+
+header,
+main,
+footer {
+  position: relative;
+  z-index: 1;
+}
+
 /* ---- header ---- */
 .hero h1 {
   display: flex;
   align-items: center;
   gap: 14px;
   margin: 0;
-  font-size: clamp(2rem, 4vw, 2.8rem);
+  font-size: clamp(2.2rem, 5vw, 3.2rem);
+  font-weight: 800;
   letter-spacing: -0.02em;
 }
 
 .hero img {
-  filter: drop-shadow(0 0 12px rgba(196, 181, 253, 0.55));
+  filter: drop-shadow(0 0 14px var(--ember-glow));
+  animation: bob 4s ease-in-out infinite;
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-3px) rotate(-3deg);
+  }
+}
+
+.forge-word {
+  background: linear-gradient(
+    180deg,
+    var(--ember-hot),
+    var(--ember) 60%,
+    #d9481a
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 24px rgba(255, 122, 47, 0.25);
 }
 
 .tagline {
   margin: 8px 0 0;
-  font-size: 1.15rem;
-  color: var(--violet);
+  font-size: 1.2rem;
+  color: var(--ember-hot);
 }
 
 .lede {
@@ -111,16 +187,42 @@ main {
 }
 
 .panel {
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
   border: 1px solid var(--border);
+  border-top: 2px solid rgba(255, 122, 47, 0.45);
   border-radius: var(--radius);
   padding: 20px;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 0 14px;
-  font-size: 1.1rem;
-  color: var(--violet);
+  font-size: 1.15rem;
+  color: var(--steel);
+}
+
+.step {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    var(--ember-hot),
+    var(--ember) 55%,
+    #b8360f
+  );
+  color: #2a0f02;
+  font-weight: 800;
+  font-size: 0.95rem;
+  box-shadow: 0 0 14px var(--ember-glow);
 }
 
 .upload {
@@ -140,14 +242,16 @@ main {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 140px;
+  min-height: 160px;
   padding: 16px;
   text-align: center;
   border: 2px dashed var(--border);
   border-radius: var(--radius);
+  background: rgba(0, 0, 0, 0.18);
   transition:
     border-color 0.15s,
-    background 0.15s;
+    background 0.15s,
+    transform 0.15s;
 }
 
 .dropzone p {
@@ -155,9 +259,17 @@ main {
   color: var(--muted);
 }
 
+.drop-icon {
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--steel);
+}
+
 .dropzone.dragging {
-  border-color: var(--accent-strong);
-  background: rgba(110, 231, 160, 0.06);
+  border-color: var(--ember);
+  background: rgba(255, 122, 47, 0.08);
+  transform: scale(1.01);
+  box-shadow: 0 0 28px var(--ember-glow) inset;
 }
 
 .sample {
@@ -178,14 +290,24 @@ button,
 .button {
   font: inherit;
   cursor: pointer;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid transparent;
-  padding: 9px 16px;
+  padding: 10px 16px;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
+  transition:
+    transform 0.08s,
+    box-shadow 0.15s,
+    background 0.15s,
+    border-color 0.15s;
+}
+
+button:active:not(:disabled),
+.button:active {
+  transform: translateY(1px) scale(0.99);
 }
 
 button:disabled {
@@ -194,24 +316,34 @@ button:disabled {
 }
 
 .primary {
-  background: var(--accent-strong);
-  color: #062312;
-  font-weight: 600;
-  box-shadow: 0 0 22px rgba(110, 231, 160, 0.25);
+  background: linear-gradient(180deg, var(--ember-hot), var(--ember));
+  color: #2a0f02;
+  font-weight: 700;
+  box-shadow: 0 0 22px var(--ember-glow);
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--accent);
+  box-shadow: 0 0 34px rgba(255, 122, 47, 0.6);
+}
+
+.forge-button:hover:not(:disabled) {
+  animation: glow 1.2s ease-in-out infinite;
+}
+
+@keyframes glow {
+  50% {
+    box-shadow: 0 0 40px rgba(255, 179, 71, 0.75);
+  }
 }
 
 .secondary {
-  background: var(--panel-2);
+  background: linear-gradient(180deg, #3a4350, #2a313b);
   color: var(--text);
-  border-color: var(--border);
+  border-color: #4d5866;
 }
 
 .secondary:hover:not(:disabled) {
-  border-color: var(--violet);
+  border-color: var(--steel);
 }
 
 .small {
@@ -233,7 +365,7 @@ button:disabled {
 }
 
 :focus-visible {
-  outline: 2px solid var(--violet);
+  outline: 2px solid var(--ember-hot);
   outline-offset: 2px;
 }
 
@@ -243,33 +375,119 @@ button:disabled {
   color: var(--muted);
 }
 
-.working {
+/* The hammer, the anvil and the sparks while a WSDL is forged. */
+.forging {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin: 0;
+  gap: 18px;
 }
 
-.spinner {
-  width: 20px;
-  height: 20px;
+.anvil-scene {
+  width: 160px;
+  height: 110px;
   flex: none;
-  border-radius: 50%;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent-strong);
-  animation: spin 0.8s linear infinite;
+  overflow: visible;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+.anvil {
+  fill: var(--steel);
+}
+
+.anvil-base {
+  fill: var(--steel-dark);
+}
+
+.ingot {
+  fill: var(--ember);
+  animation: heat 0.9s ease-in-out infinite;
+}
+
+@keyframes heat {
+  50% {
+    fill: var(--ember-hot);
+    filter: drop-shadow(0 0 6px var(--ember));
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .spinner {
-    animation-duration: 2.5s;
+.hammer {
+  transform-origin: 140px 50px;
+  animation: strike 0.9s cubic-bezier(0.5, 0, 0.75, 0) infinite;
+}
+
+.hammer-handle {
+  fill: #8b5a3c;
+}
+
+.hammer-head {
+  fill: #5d6875;
+}
+
+@keyframes strike {
+  0%,
+  100% {
+    transform: rotate(-28deg);
   }
+  55% {
+    transform: rotate(6deg);
+  }
+  62% {
+    transform: rotate(2deg);
+  }
+}
+
+.spark {
+  fill: var(--ember-hot);
+  opacity: 0;
+  animation: spark 0.9s ease-out infinite;
+}
+
+.s1 {
+  --dx: -26px;
+  --dy: -30px;
+}
+.s2 {
+  --dx: 18px;
+  --dy: -34px;
+}
+.s3 {
+  --dx: 32px;
+  --dy: -14px;
+}
+.s4 {
+  --dx: -36px;
+  --dy: -10px;
+}
+.s5 {
+  --dx: 4px;
+  --dy: -42px;
+}
+
+@keyframes spark {
+  0%,
+  55% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy));
+    opacity: 0;
+  }
+}
+
+.forging-text {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.forging-step {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ember-hot);
 }
 
 .failure {
@@ -280,6 +498,10 @@ button:disabled {
 .failure h3 {
   margin: 0 0 6px;
   color: var(--danger);
+}
+
+.failure h3::before {
+  content: "💥 ";
 }
 
 .failure p {
@@ -293,6 +515,19 @@ button:disabled {
 }
 
 /* ---- result ---- */
+.result {
+  animation: cool 0.9s ease-out;
+}
+
+@keyframes cool {
+  from {
+    filter: brightness(1.6) sepia(0.6) hue-rotate(-20deg);
+  }
+  to {
+    filter: none;
+  }
+}
+
 .result-head {
   display: flex;
   flex-wrap: wrap;
@@ -303,27 +538,60 @@ button:disabled {
 
 .result-head h3 {
   margin: 0;
-  font-size: 1.35rem;
+  font-size: 1.45rem;
+}
+
+.forged-badge {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ember-hot);
+}
+
+/* A zip that generated but lost its fields. */
+.hollow {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 138, 122, 0.55);
+  background: rgba(255, 138, 122, 0.08);
+}
+
+.hollow h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+  color: var(--danger);
+}
+
+.hollow h3::before {
+  content: "🕳️ ";
+}
+
+.hollow p {
+  margin: 0;
+  color: var(--muted);
 }
 
 /* ---- warnings ---- */
 .warnings-none {
   margin: 14px 0 0;
-  color: var(--accent);
+  color: var(--ok);
 }
 
 .warnings {
   margin-top: 16px;
-  border: 1px solid rgba(252, 211, 77, 0.35);
-  background: rgba(252, 211, 77, 0.05);
+  border: 1px solid rgba(255, 209, 102, 0.35);
+  background: rgba(255, 209, 102, 0.05);
   border-radius: var(--radius);
   padding: 12px 14px;
   overflow-x: auto;
 }
 
 .warnings.rejected {
-  border-color: rgba(252, 165, 165, 0.4);
-  background: rgba(252, 165, 165, 0.05);
+  border-color: rgba(255, 138, 122, 0.4);
+  background: rgba(255, 138, 122, 0.05);
 }
 
 .warnings h3 {
@@ -356,6 +624,25 @@ button:disabled {
   border-top: none;
 }
 
+.warnings .num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--warn);
+}
+
+.warnings .loc {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.warnings details summary {
+  cursor: pointer;
+  color: var(--ember-hot);
+  font-size: 0.85rem;
+}
+
 /* ---- artifact tabs ---- */
 .artifacts {
   margin-top: 20px;
@@ -373,7 +660,7 @@ button:disabled {
   color: var(--muted);
   border: none;
   border-bottom: 2px solid transparent;
-  border-radius: 6px 6px 0 0;
+  border-radius: 8px 8px 0 0;
   padding: 8px 14px;
 }
 
@@ -382,8 +669,8 @@ button:disabled {
 }
 
 .tabs [role="tab"][aria-selected="true"] {
-  color: var(--accent);
-  border-bottom-color: var(--accent-strong);
+  color: var(--ember-hot);
+  border-bottom-color: var(--ember);
   background: var(--panel-2);
 }
 
@@ -435,12 +722,12 @@ button:disabled {
 }
 
 .files button:hover {
-  background: rgba(196, 181, 253, 0.08);
+  background: rgba(255, 179, 71, 0.08);
 }
 
 .files button[aria-current="true"] {
-  background: rgba(110, 231, 160, 0.12);
-  color: var(--accent);
+  background: rgba(255, 122, 47, 0.14);
+  color: var(--ember-hot);
 }
 
 .files .name {
@@ -486,7 +773,7 @@ button:disabled {
   padding: 14px;
   max-height: 560px;
   overflow: auto;
-  background: #0b0812;
+  background: #0c0806;
   font-size: 0.85rem;
   line-height: 1.45;
   tab-size: 4;
@@ -511,5 +798,30 @@ footer p {
 
   .files {
     max-height: 220px;
+  }
+}
+
+/* Motion is decoration: switch it all off for people who ask for that. */
+@media (prefers-reduced-motion: reduce) {
+  .embers {
+    display: none;
+  }
+
+  .hero img,
+  .forge-button:hover:not(:disabled),
+  .ingot,
+  .hammer,
+  .spark,
+  .result {
+    animation: none;
+  }
+
+  .hammer {
+    transform: rotate(2deg);
+  }
+
+  .spark {
+    opacity: 0.8;
+    transform: translate(var(--dx), var(--dy));
   }
 }

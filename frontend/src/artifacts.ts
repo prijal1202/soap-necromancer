@@ -109,6 +109,32 @@ export function readReport(files: Artifact[]): Report | null {
   }
 }
 
+/** How much of the service came through: operations whose request and response both ended up with no fields. */
+export interface Health {
+  operations: number
+  hollow: number
+}
+
+/** Reads model.json. A complex type with zero fields after parsing usually means its content was dropped. */
+export function readHealth(files: Artifact[]): Health | null {
+  const file = files.find((f) => f.path === 'model.json')
+  if (!file) return null
+  try {
+    const raw: unknown = JSON.parse(file.text)
+    if (!isRecord(raw) || !Array.isArray(raw.operations) || !isRecord(raw.types)) return null
+    const types = raw.types
+    const empty = (ref: unknown): boolean => {
+      if (!isRecord(ref) || typeof ref.typeId !== 'string') return false
+      const t = types[ref.typeId]
+      return isRecord(t) && t.kind === 'COMPLEX' && Array.isArray(t.fields) && t.fields.length === 0
+    }
+    const ops = raw.operations.filter(isRecord)
+    return { operations: ops.length, hollow: ops.filter((op) => empty(op.input) && empty(op.output)).length }
+  } catch {
+    return null
+  }
+}
+
 /** Counted once per file instead of splitting the whole text on every render. */
 function countLines(text: string): number {
   let n = 1

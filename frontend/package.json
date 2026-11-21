@@ -2,7 +2,7 @@
   "name": "soap-necromancer-ui",
   "private": true,
   "version": "0.1.0",
-  "description": "One-page UI for the SOAP Necromancer generator. Built by Maven (web module) into the jar.",
+  "description": "One-page UI for the WSDLForge generator. Built by Maven (web module) into the jar.",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

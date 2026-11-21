@@ -8,8 +8,8 @@
   <artifactId>soap-necromancer</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <name>SOAP Necromancer</name>
-  <description>Generator that resurrects legacy SOAP services as REST, OpenAPI and MCP.</description>
+  <name>WSDLForge</name>
+  <description>Generator that reforges legacy SOAP services into REST, OpenAPI and MCP.</description>
 
   <modules>
     <module>runtime</module>

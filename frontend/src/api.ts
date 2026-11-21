@@ -113,7 +113,7 @@ function filenameFrom(disposition: string | null): string {
   if (!name) name = disposition?.match(/filename\s*=\s*"?([^";]+)"?/i)?.[1] ?? ''
   // The server builds the name from the service name; still strip anything path-like or invisible.
   const safe = name.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '_').trim()
-  return safe.endsWith('.zip') ? safe : 'resurrected.zip'
+  return safe.endsWith('.zip') ? safe : 'forged.zip'
 }
 
 function retryAfter(header: string | null): number | null {

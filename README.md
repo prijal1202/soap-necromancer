@@ -1,6 +1,6 @@
-# SOAP Necromancer
+# WSDLForge
 
-Resurrect legacy SOAP services for REST clients and AI agents. Built for Kiroween 2026
+Reforge legacy SOAP services for REST clients and AI agents: dead services in, working APIs out. Built for Kiroween 2026
 (category: Resurrection) with Kiro specs, steering files and hooks.
 
 Upload a WSDL 1.1 `document/literal` file. The generator parses it and returns a zip with:
@@ -12,6 +12,9 @@ Upload a WSDL 1.1 `document/literal` file. The generator parses it and returns a
 
 > Live: https://soap-necromancer.onrender.com (Render free tier; the first request after a long idle
 > can take up to a minute). See `.kiro/steering/` for scope and architecture.
+>
+> Formerly **SOAP Necromancer**. The URL, the repository, the jar name and the Java packages
+> (`dev.soapnecromancer`) keep the old name so existing links and builds keep working.
 
 ## Run the generator
 
@@ -26,16 +29,15 @@ bank SOAP service at `/mock-bank/ws` (SOAP 1.1) and `/mock-bank/ws12` (SOAP 1.2)
 
 ## Use the UI
 
-One page: drop a WSDL file (or click **Resurrect the sample bank WSDL**, or **Same bank over SOAP
-1.2**), then read the warnings,
-browse every generated file in tabs (README, OpenAPI, generated proxy, tests, generated MCP server,
+One page: drop a WSDL file onto the anvil (or click **Forge the sample bank**, or **Forge it over
+SOAP 1.2**), then read the warnings, browse every generated file in tabs (README, OpenAPI, generated proxy, tests, generated MCP server,
 model and report), and download the zip. The browser unpacks the zip itself, so the server still
 holds nothing. A 422 shows the same warnings table with the reason the WSDL was rejected. Source and
 dev setup: `frontend/README.md`.
 
 ```
 curl -o bank.wsdl http://localhost:8080/api/sample-wsdl
-curl -F wsdl=@bank.wsdl http://localhost:8080/api/generate -o resurrected.zip
+curl -F wsdl=@bank.wsdl http://localhost:8080/api/generate -o forged.zip
 ```
 
 `/api/sample-wsdl?soap=1.2` returns the same bank with a SOAP 1.2 binding, addressed at
@@ -52,7 +54,7 @@ directly. Nothing is stored. Imported schemas and WSDLs are never fetched; they 
 
 ```json
 {
-  "generator": "SOAP Necromancer",
+  "generator": "WSDLForge",
   "version": "0.1.0-SNAPSHOT",
   "service": "LegacyBankService",
   "soapVersion": "1.1",
@@ -84,7 +86,7 @@ A 422 always carries the same `warnings` array as the zip report, so a UI can re
 ```json
 {
   "type": "about:blank",
-  "title": "WSDL cannot be resurrected",
+  "title": "WSDL cannot be forged",
   "status": 422,
   "detail": "No supported operations: the generator needs a SOAP 1.1 or 1.2 document/literal binding",
   "warnings": [
@@ -167,13 +169,28 @@ Requires Java 21 and Maven 3.9+.
 
 ## Supported and unsupported
 
-- Supported: SOAP 1.1 and SOAP 1.2 over HTTP, `document/literal`, core XSD subset.
-- Unsupported (reported as warnings): rpc/encoded, WS-Security, WS-Addressing, and XSD
-  features outside the core subset.
+- Supported: SOAP 1.1 and SOAP 1.2 over HTTP, `document/literal`, the core XSD subset, type
+  extension (`complexContent`/`extension` is flattened: base fields first), and the integer family
+  (`xs:integer` at any size; `short`, `byte` and the unsigned types widened to `int`, `long` or
+  `integer`).
+- Unsupported (reported as warnings): rpc/encoded, WS-Security, WS-Addressing, `restriction` and
+  `simpleContent` derivation, attributes, `xs:choice`, `xs:any`, `xs:float`/`xs:double` (kept as
+  strings), and other XSD features outside the core subset.
+- When every operation ends up with empty request and response types, the UI says so in a
+  "hollow casting" banner instead of only listing warnings.
+
+Tried on real WSDLs: GlobalWeather works; eBay's 3.7 MB trading API (over the 2 MB hosted cap, run
+locally) now gets fields on 435 of its 443 complex types (it had none before type extension); the
+ONVIF device service works for simple operations, but its types live in a separate XSD file that
+the generator deliberately never fetches.
 
 ## Future work
 
-- Basic auth and header pass-through for real enterprise endpoints.
+- Upload a zip of a WSDL plus its XSD files, resolving imports only from inside the zip (still no
+  network fetches), so ONVIF-style services get their types.
+- Basic auth, WS-Security UsernameToken and header pass-through for real enterprise endpoints.
+- Attributes, `xs:choice` and rpc/literal.
+- A choice of SOAP version when a WSDL offers both (today SOAP 1.1 wins).
 
 ## License
 

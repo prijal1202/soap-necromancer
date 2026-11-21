@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { generate, NetworkError, SAMPLES, sampleWsdl, type Problem } from './api.ts'
-import { formatBytes, groupArtifacts, readReport, readZip, type ArtifactGroup, type Report } from './artifacts.ts'
+import {
+  formatBytes,
+  groupArtifacts,
+  readHealth,
+  readReport,
+  readZip,
+  type ArtifactGroup,
+  type Health,
+  type Report,
+} from './artifacts.ts'
 import { ArtifactTabs } from './components/ArtifactTabs.tsx'
+import { ForgeAnimation } from './components/ForgeAnimation.tsx'
 import { UploadPanel } from './components/UploadPanel.tsx'
 import { WarningsPanel } from './components/WarningsPanel.tsx'
 
@@ -18,6 +28,7 @@ interface Result {
   fileCount: number
   groups: ArtifactGroup[]
   report: Report | null
+  health: Health | null
 }
 
 type State =
@@ -38,7 +49,7 @@ export default function App() {
     zipUrl.current = null
   }
 
-  async function resurrect(load: () => Promise<File>, label: string) {
+  async function forge(load: () => Promise<File>, label: string) {
     const id = ++runId.current
     const stale = () => runId.current !== id
     setState({ phase: 'working', source: label, note: 'parsing the WSDL and generating every artifact…' })
@@ -61,6 +72,7 @@ export default function App() {
               fileCount: files.length,
               groups: groupArtifacts(files),
               report: readReport(files),
+              health: readHealth(files),
             },
           })
           return
@@ -68,7 +80,7 @@ export default function App() {
         const retryable = outcome.problem.status === 503 || outcome.problem.status === 429
         if (retryable && attempt < MAX_BUSY_RETRIES) {
           const wait = Math.min(outcome.retryAfterSeconds ?? 5, MAX_RETRY_WAIT_SECONDS)
-          setState({ phase: 'working', source: label, note: `the generator is busy, retrying in ${wait} s…` })
+          setState({ phase: 'working', source: label, note: `every anvil is busy, retrying in ${wait} s…` })
           // Jitter, so visitors told the same Retry-After do not all come back in the same instant.
           await new Promise((resolve) => setTimeout(resolve, wait * 1000 + Math.random() * 1000))
           if (stale()) return
@@ -92,44 +104,50 @@ export default function App() {
 
   return (
     <>
+      <div className="embers" aria-hidden="true">
+        {Array.from({ length: 14 }, (_, i) => (
+          <span key={i} style={{ ['--i' as string]: i }} />
+        ))}
+      </div>
       <header className="hero">
         <h1>
-          <img src="/favicon.svg" alt="" width={44} height={44} />
-          SOAP Necromancer
+          <img src="/favicon.svg" alt="" width={52} height={52} />
+          <span>
+            WSDL<span className="forge-word">Forge</span>
+          </span>
         </h1>
-        <p className="tagline">Resurrect legacy SOAP services for REST clients and AI agents.</p>
+        <p className="tagline">Old SOAP goes in the fire. REST, OpenAPI and MCP come out the other side.</p>
         <p className="lede">
-          Upload a WSDL. Get back one zip with an OpenAPI 3.0 spec, a <strong>generated proxy</strong> (Spring Boot,
-          JSON in, SOAP 1.1 or 1.2 out), a <strong>generated MCP server</strong> that gives agents like Kiro one tool per
-          operation, and the tests that prove the <span className="nowrap">JSON&lt;-&gt;XML</span> mapping is lossless. Nothing is stored on the server.
+          Toss in a crusty WSDL. We heat it, hammer it and quench it into one zip: an OpenAPI 3.0 spec, a{' '}
+          <strong>generated proxy</strong> (Spring Boot, JSON in, SOAP 1.1 or 1.2 out), a{' '}
+          <strong>generated MCP server</strong> that hands agents like Kiro one tool per operation, and the tests that
+          prove the <span className="nowrap">JSON&lt;-&gt;XML</span> mapping loses nothing. Nothing is stored on the
+          server.
         </p>
       </header>
 
       <main>
         <UploadPanel
           busy={busy}
-          onFile={(file) => void resurrect(async () => file, file.name)}
-          onSample={(version) =>
-            void resurrect(() => sampleWsdl(version), `${SAMPLES[version].filename} (sample)`)
-          }
+          onFile={(file) => void forge(async () => file, file.name)}
+          onSample={(version) => void forge(() => sampleWsdl(version), `${SAMPLES[version].filename} (sample)`)}
         />
 
         <section className="panel results" aria-labelledby="results-title" aria-busy={busy}>
-          <h2 id="results-title">2. Inspect and download</h2>
+          <h2 id="results-title">
+            <span className="step">2</span> Inspect the casting and carry it home
+          </h2>
           {/* Only this short line is announced; the file viewer below must not be read out on every change. */}
           <p className="sr-only" role="status">
             {statusText(state)}
           </p>
           {state.phase === 'idle' && (
-            <p className="placeholder">Nothing summoned yet. The generated files will appear here.</p>
+            <p className="placeholder">The forge is cold. Your freshly forged files will cool down right here.</p>
           )}
           {state.phase === 'working' && (
-            <p className="working">
-              <span className="spinner" aria-hidden="true" />
-              <span>
-                <strong>{state.source}</strong>: {state.note}
-              </span>
-            </p>
+            <div>
+              <ForgeAnimation note={`${state.source}: ${state.note}`} />
+            </div>
           )}
           {state.phase === 'failed' && <Failure source={state.source} problem={state.problem} />}
           {state.phase === 'done' && <ResultView result={state.result} />}
@@ -138,8 +156,8 @@ export default function App() {
 
       <footer>
         <p>
-          Supported: SOAP 1.1 and 1.2 over HTTP, <code>document/literal</code>, the core XSD types. rpc/encoded,
-          WS-Security and WS-Addressing are reported as warnings. Uploads up to 2 MB.
+          Metals we work: SOAP 1.1 and 1.2 over HTTP, <code>document/literal</code>, the core XSD types and type
+          extension. rpc/encoded, WS-Security and WS-Addressing are reported as warnings. Uploads up to 2 MB.
         </p>
         <p>
           The sample bank is shared by every visitor and resets to its seeded accounts every 30 minutes.{' '}
@@ -151,12 +169,15 @@ export default function App() {
 }
 
 function ResultView({ result }: { result: Result }) {
-  const { report } = result
+  const { report, health } = result
   const operations = report?.operations.length ?? 0
   return (
     <div className="result">
       <div className="result-head">
         <div>
+          <p className="forged-badge">
+            <span aria-hidden="true">✨</span> Freshly forged
+          </p>
           <h3>{report?.service ?? 'Generated service'}</h3>
           <p className="meta">
             {operations} operation{operations === 1 ? '' : 's'}
@@ -164,12 +185,34 @@ function ResultView({ result }: { result: Result }) {
             files · {formatBytes(result.zipBytes)} zip
           </p>
         </div>
-        <a className="button primary" href={result.url} download={result.filename}>
-          Download {result.filename}
+        <a className="button primary forge-button" href={result.url} download={result.filename}>
+          <span aria-hidden="true">⬇</span> Download {result.filename}
         </a>
       </div>
+      {health && health.hollow > 0 && <HollowWarning health={health} />}
       <WarningsPanel warnings={report?.warnings ?? []} mode="report" />
       <ArtifactTabs key={result.id} groups={result.groups} />
+    </div>
+  )
+}
+
+/**
+ * A zip that generated fine can still be hollow: operations whose request and response types lost every field.
+ * Say so plainly instead of leaving it to a long warnings table.
+ */
+function HollowWarning({ health }: { health: Health }) {
+  const all = health.hollow === health.operations
+  return (
+    <div className="hollow" role="note">
+      <h3>
+        {all ? 'Hollow casting' : 'Partly hollow casting'}: {health.hollow} of {health.operations} operation
+        {health.operations === 1 ? '' : 's'} {health.hollow === 1 ? 'has' : 'have'} no fields
+      </h3>
+      <p>
+        Their requests and responses came out empty, so the generated API{all ? '' : ' for those operations'} sends
+        and returns <code>{'{}'}</code>. The warnings below say why. Usually it is a schema feature outside the
+        supported subset, or types defined in a separate XSD file that the forge does not fetch.
+      </p>
     </div>
   )
 }

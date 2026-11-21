@@ -98,7 +98,7 @@ class GenerateApiTest {
         assertThat(r.statusCode()).isEqualTo(200);
         assertThat(r.headers().firstValue("Content-Type")).hasValue("application/zip");
         assertThat(r.headers().firstValue("Content-Disposition"))
-                .hasValueSatisfying(v -> assertThat(v).contains("legacy-bank-service-resurrected.zip"));
+                .hasValueSatisfying(v -> assertThat(v).contains("legacy-bank-service-forged.zip"));
         assertThat(r.headers().firstValue("X-Generator-Operations")).hasValue("3");
         assertThat(r.headers().firstValue("X-Generator-Warnings")).hasValue("0");
         assertThat(r.headers().firstValue("Cache-Control")).hasValue("no-store");
@@ -211,7 +211,7 @@ class GenerateApiTest {
         HttpResponse<byte[]> r = postRaw(rpcOnly.getBytes(StandardCharsets.UTF_8), "text/xml");
         assertThat(r.statusCode()).isEqualTo(422);
         JsonNode p = problem(r);
-        assertThat(p.get("title").asText()).isEqualTo("WSDL cannot be resurrected");
+        assertThat(p.get("title").asText()).isEqualTo("WSDL cannot be forged");
         assertThat(p.get("warnings").toString()).contains("RPC_STYLE");
     }
 
@@ -309,7 +309,7 @@ class GenerateApiTest {
     private void assert422(HttpResponse<byte[]> r, String warningCode) throws IOException {
         assertThat(r.statusCode()).as(new String(r.body(), StandardCharsets.UTF_8)).isEqualTo(422);
         JsonNode p = problem(r);
-        assertThat(p.get("title").asText()).isEqualTo("WSDL cannot be resurrected");
+        assertThat(p.get("title").asText()).isEqualTo("WSDL cannot be forged");
         assertThat(p.get("warnings").toString()).contains(warningCode);
     }
 

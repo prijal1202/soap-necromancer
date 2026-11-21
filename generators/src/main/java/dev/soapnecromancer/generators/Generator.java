@@ -53,7 +53,7 @@ public final class Generator {
 
     private static Map<String, Object> report(ServiceModel model, List<Warning> warnings) {
         Map<String, Object> r = new LinkedHashMap<>();
-        r.put("generator", "SOAP Necromancer");
+        r.put("generator", "WSDLForge");
         r.put("version", Versions.GENERATOR);
         r.put("service", model.name());
         r.put("soapVersion", model.soapVersion().label());

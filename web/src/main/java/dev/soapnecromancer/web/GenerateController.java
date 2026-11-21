@@ -108,7 +108,7 @@ public class GenerateController {
                     result.model().name(), result.model().operations().size(), result.warnings().size(),
                     files.files().size(), zip.length, (System.nanoTime() - start) / 1_000_000);
 
-            String filename = truncate(Names.artifactId(result.model().name(), "resurrected"), 100) + ".zip";
+            String filename = truncate(Names.artifactId(result.model().name(), "forged"), 100) + ".zip";
             return ResponseEntity.ok()
                     .contentType(ZIP)
                     .header(HttpHeaders.CONTENT_DISPOSITION,

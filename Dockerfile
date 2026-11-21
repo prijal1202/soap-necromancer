@@ -1,4 +1,4 @@
-# SOAP Necromancer: generator web app + bundled mock-bank, one JVM, one port (docs/decisions.md section 3).
+# WSDLForge: generator web app + bundled mock-bank, one JVM, one port (docs/decisions.md section 3).
 # Build:  docker build -t soap-necromancer .
 # Run:    docker run --rm -p 8080:8080 --memory 512m soap-necromancer
 #

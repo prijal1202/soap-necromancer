@@ -53,7 +53,7 @@ class ApiErrors {
      */
     @ExceptionHandler(GenerationLimitException.class)
     ResponseEntity<ProblemDetail> outputTooLarge(GenerationLimitException e) {
-        ResponseEntity<ProblemDetail> r = problem(HttpStatus.UNPROCESSABLE_ENTITY, "WSDL cannot be resurrected",
+        ResponseEntity<ProblemDetail> r = problem(HttpStatus.UNPROCESSABLE_ENTITY, "WSDL cannot be forged",
                 e.getMessage() + ". The hosted generator refuses it to protect the service.");
         r.getBody().setProperty("warnings", List.of(new Warning(e.code(), e.getMessage(), "output")));
         return r;
@@ -97,7 +97,7 @@ class ApiErrors {
      */
     @ExceptionHandler(WsdlParseException.class)
     ResponseEntity<ProblemDetail> unusable(WsdlParseException e) {
-        ResponseEntity<ProblemDetail> r = problem(HttpStatus.UNPROCESSABLE_ENTITY, "WSDL cannot be resurrected",
+        ResponseEntity<ProblemDetail> r = problem(HttpStatus.UNPROCESSABLE_ENTITY, "WSDL cannot be forged",
                 e.getMessage());
         r.getBody().setProperty("warnings", e.warnings());
         return r;
