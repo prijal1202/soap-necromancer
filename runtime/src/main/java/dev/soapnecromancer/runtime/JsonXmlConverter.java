@@ -189,6 +189,7 @@ public final class JsonXmlConverter {
                     "xs:int");
             case LONG ->
                 integral(v, path, BigInteger.valueOf(Long.MIN_VALUE), BigInteger.valueOf(Long.MAX_VALUE), "xs:long");
+            case INTEGER -> integral(v, path, null, null, "xs:integer");
             case DECIMAL -> decimal(v, path).toPlainString();
             case BOOLEAN -> {
                 if (v instanceof Boolean b)
@@ -208,7 +209,9 @@ public final class JsonXmlConverter {
         // Cheap pre-check: more than 19 integer digits can never fit a long, and
         // toBigIntegerExact
         // would otherwise materialise up to MAX_NUMBER_DIGITS digits.
-        if (d.precision() - d.scale() > 19)
+        // min == null means xs:integer: no range, but decimal() already bounded the
+        // digits.
+        if (min != null && d.precision() - d.scale() > 19)
             throw new ConversionException(path, "number is out of range for " + xsType);
         BigInteger i;
         try {
@@ -216,7 +219,7 @@ public final class JsonXmlConverter {
         } catch (ArithmeticException e) {
             throw new ConversionException(path, "expected an integer for " + xsType + ", got " + quote(d.toString()));
         }
-        if (i.compareTo(min) < 0 || i.compareTo(max) > 0) {
+        if (min != null && (i.compareTo(min) < 0 || i.compareTo(max) > 0)) {
             throw new ConversionException(path, i + " is out of range for " + xsType);
         }
         return i.toString();
@@ -363,6 +366,13 @@ public final class JsonXmlConverter {
                 case STRING -> raw;
                 case INT -> Integer.valueOf(text);
                 case LONG -> Long.valueOf(text);
+                case INTEGER -> {
+                    // Parsing a BigInteger is quadratic in its length: refuse before parsing.
+                    if (text.length() > MAX_NUMBER_DIGITS + 1)
+                        throw new ConversionException(path, "number is too large (more than " + MAX_NUMBER_DIGITS
+                                + " digits)");
+                    yield new BigInteger(text);
+                }
                 case DECIMAL -> bounded(new BigDecimal(text), path);
                 case BOOLEAN -> switch (text) {
                     case "true", "1" -> Boolean.TRUE;

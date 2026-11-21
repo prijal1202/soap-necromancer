@@ -170,6 +170,7 @@ public final class JsonSchemas {
             case STRING -> map("type", "string");
             case INT -> map("type", "integer", "format", "int32");
             case LONG -> map("type", "integer", "format", "int64");
+            case INTEGER -> map("type", "integer");
             case DECIMAL -> decimalAsString
                     ? map("type", "string", "format", "decimal", "pattern", "^[+-]?(\\d+(\\.\\d*)?|\\.\\d+)$")
                     : map("type", "number", "format", "decimal");

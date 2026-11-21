@@ -7,6 +7,7 @@ import net.jqwik.api.Combinators;
 import net.jqwik.api.Tuple;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -207,6 +208,8 @@ public final class ModelArbitraries {
             case STRING -> xmlStrings().map(s -> (Object) s);
             case INT -> Arbitraries.integers().map(i -> (Object) i);
             case LONG -> Arbitraries.longs().map(l -> (Object) l);
+            case INTEGER -> Arbitraries.bigIntegers()
+                    .between(BigInteger.TEN.pow(60).negate(), BigInteger.TEN.pow(60)).map(i -> (Object) i);
             case DECIMAL -> decimals().map(d -> (Object) d);
             case BOOLEAN -> Arbitraries.of(true, false).map(v -> (Object) v);
             case DATE -> Combinators.combine(

@@ -360,7 +360,7 @@ class WsdlParserTest {
                         ParseResult r = withTypes(
                                         """
                                                         <xs:complexType name="Base"><xs:sequence><xs:element name="id" type="xs:string"/></xs:sequence></xs:complexType>
-                                                        <xs:complexType name="Derived"><xs:complexContent><xs:extension base="tns:Base"/></xs:complexContent></xs:complexType>
+                                                        <xs:complexType name="Derived"><xs:complexContent><xs:restriction base="tns:Base"/></xs:complexContent></xs:complexType>
                                                         <xs:complexType name="Unordered"><xs:all><xs:element name="z" type="xs:string"/></xs:all></xs:complexType>
                                                         <xs:simpleType name="Codes"><xs:list itemType="xs:string"/></xs:simpleType>
                                                         <xs:element name="OpRequest"><xs:complexType><xs:sequence>

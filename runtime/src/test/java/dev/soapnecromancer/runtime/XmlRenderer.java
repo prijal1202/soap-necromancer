@@ -6,12 +6,15 @@ import java.math.BigDecimal;
 import java.util.*;
 
 /**
- * Test-only XML writer, independent of the converter's writer. Renders a canonical value with
- * random namespace prefixes, default-namespace declarations, whitespace between elements, CDATA,
- * padded numbers and 1/0 booleans: every lexical choice a real SOAP backend might make.
+ * Test-only XML writer, independent of the converter's writer. Renders a
+ * canonical value with
+ * random namespace prefixes, default-namespace declarations, whitespace between
+ * elements, CDATA,
+ * padded numbers and 1/0 booleans: every lexical choice a real SOAP backend
+ * might make.
  */
 public final class XmlRenderer {
-    private static final String[] PREFIXES = {"p", "q", "x1", "soap2"};
+    private static final String[] PREFIXES = { "p", "q", "x1", "soap2" };
 
     private final ServiceModel model;
     private final Random random;
@@ -23,12 +26,14 @@ public final class XmlRenderer {
 
     public String render(ElementRef root, Object value) {
         StringBuilder sb = new StringBuilder();
-        if (random.nextBoolean()) sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        if (random.nextBoolean())
+            sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         element(sb, root.namespace(), root.localName(), model.type(root.typeId()), value, new Scope(Map.of(), ""));
         return sb.toString();
     }
 
-    private record Scope(Map<String, String> prefixes, String defaultNs) {}
+    private record Scope(Map<String, String> prefixes, String defaultNs) {
+    }
 
     private void element(StringBuilder sb, String ns, String local, TypeModel type, Object value, Scope scope) {
         StringBuilder decl = new StringBuilder();
@@ -36,7 +41,8 @@ public final class XmlRenderer {
         Scope inner;
         if (ns.isEmpty()) {
             qname = local;
-            if (!scope.defaultNs().isEmpty() || random.nextInt(4) == 0) decl.append(" xmlns=\"\"");
+            if (!scope.defaultNs().isEmpty() || random.nextInt(4) == 0)
+                decl.append(" xmlns=\"\"");
             inner = new Scope(scope.prefixes(), "");
         } else {
             List<String> bound = scope.prefixes().entrySet().stream()
@@ -47,7 +53,8 @@ public final class XmlRenderer {
                 inner = scope;
             } else if (choice == 1) {
                 qname = local;
-                if (!scope.defaultNs().equals(ns)) decl.append(" xmlns=\"").append(attr(ns)).append('"');
+                if (!scope.defaultNs().equals(ns))
+                    decl.append(" xmlns=\"").append(attr(ns)).append('"');
                 inner = new Scope(scope.prefixes(), ns);
             } else {
                 String p = PREFIXES[random.nextInt(PREFIXES.length)];
@@ -63,7 +70,8 @@ public final class XmlRenderer {
             Map<?, ?> obj = (Map<?, ?>) value;
             for (FieldModel f : type.fields()) {
                 Object v = obj.get(f.name());
-                if (v == null) continue;
+                if (v == null)
+                    continue;
                 TypeModel ft = model.type(f.typeId());
                 List<?> items = f.repeated() ? (List<?>) v : List.of(v);
                 for (Object item : items) {
@@ -91,7 +99,7 @@ public final class XmlRenderer {
         String lexical = switch (type.base()) {
             case BOOLEAN -> random.nextBoolean() ? value.toString() : ((Boolean) value ? "1" : "0");
             case DECIMAL -> ((BigDecimal) value).toPlainString();
-            case INT, LONG -> {
+            case INT, LONG, INTEGER -> {
                 String s = value.toString();
                 yield !s.startsWith("-") && random.nextInt(4) == 0 ? "+" + s : s;
             }

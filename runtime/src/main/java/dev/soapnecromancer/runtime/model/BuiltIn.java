@@ -5,6 +5,11 @@ public enum BuiltIn {
     STRING("xs:string"),
     INT("xs:int"),
     LONG("xs:long"),
+    /**
+     * xs:integer and the families derived from it with no fixed width: arbitrary
+     * precision.
+     */
+    INTEGER("xs:integer"),
     DECIMAL("xs:decimal"),
     BOOLEAN("xs:boolean"),
     DATE("xs:date"),

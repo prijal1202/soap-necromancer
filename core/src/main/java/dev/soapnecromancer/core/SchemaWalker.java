@@ -17,10 +17,23 @@ import java.util.*;
  */
 final class SchemaWalker {
     private static final String XS = Constants.URI_2001_SCHEMA_XSD;
-    private static final Map<String, BuiltIn> BUILT_INS = Map.of(
-            "string", BuiltIn.STRING, "normalizedString", BuiltIn.STRING, "token", BuiltIn.STRING,
-            "int", BuiltIn.INT, "long", BuiltIn.LONG, "decimal", BuiltIn.DECIMAL,
-            "boolean", BuiltIn.BOOLEAN, "date", BuiltIn.DATE, "dateTime", BuiltIn.DATE_TIME);
+    /**
+     * Narrow integer types map to the next wider supported type, so a value the
+     * schema allows is never refused. The converter does not enforce the narrower
+     * XSD range; the backend does. xs:float and xs:double stay strings: JSON has
+     * no NaN or INF, and a number type would reject values the backend may send.
+     */
+    private static final Map<String, BuiltIn> BUILT_INS = Map.ofEntries(
+            Map.entry("string", BuiltIn.STRING), Map.entry("normalizedString", BuiltIn.STRING),
+            Map.entry("token", BuiltIn.STRING),
+            Map.entry("int", BuiltIn.INT), Map.entry("short", BuiltIn.INT), Map.entry("byte", BuiltIn.INT),
+            Map.entry("unsignedByte", BuiltIn.INT), Map.entry("unsignedShort", BuiltIn.INT),
+            Map.entry("long", BuiltIn.LONG), Map.entry("unsignedInt", BuiltIn.LONG),
+            Map.entry("integer", BuiltIn.INTEGER), Map.entry("nonNegativeInteger", BuiltIn.INTEGER),
+            Map.entry("positiveInteger", BuiltIn.INTEGER), Map.entry("negativeInteger", BuiltIn.INTEGER),
+            Map.entry("nonPositiveInteger", BuiltIn.INTEGER), Map.entry("unsignedLong", BuiltIn.INTEGER),
+            Map.entry("decimal", BuiltIn.DECIMAL), Map.entry("boolean", BuiltIn.BOOLEAN),
+            Map.entry("date", BuiltIn.DATE), Map.entry("dateTime", BuiltIn.DATE_TIME));
 
     private final XmlSchemaCollection collection;
     private final List<Warning> warnings;
@@ -167,17 +180,28 @@ final class SchemaWalker {
         if (!ct.getAttributes().isEmpty() || ct.getAnyAttribute() != null) {
             warn("XSD_ATTRIBUTE", "Attributes are ignored", location);
         }
-        if (ct.getContentModel() != null) {
+        List<FieldModel> fields = new ArrayList<>();
+        XmlSchemaParticle particle;
+        XmlSchemaContentModel contentModel = ct.getContentModel();
+        if (contentModel == null) {
+            particle = ct.getParticle();
+        } else if (contentModel instanceof XmlSchemaComplexContent cc
+                && cc.getContent() instanceof XmlSchemaComplexContentExtension ext) {
+            // Parser Requirement 3.14: the base type's fields come first, then the
+            // extension's own, which is the order an XML instance uses.
+            if (!ext.getAttributes().isEmpty() || ext.getAnyAttribute() != null) {
+                warn("XSD_ATTRIBUTE", "Attributes are ignored", location);
+            }
+            inheritFields(ext.getBaseTypeName(), fields, location);
+            particle = ext.getParticle();
+        } else {
             warn("XSD_DERIVATION",
-                    "complexContent/simpleContent (extension, restriction) is not supported; content dropped",
-                    location);
+                    "Restriction and simpleContent derivation are not supported; content dropped", location);
             return TypeModel.complex(id, List.of());
         }
         if (ct.isMixed()) {
             warn("XSD_DERIVATION", "Mixed content is not supported; text content is ignored", location);
         }
-        List<FieldModel> fields = new ArrayList<>();
-        XmlSchemaParticle particle = ct.getParticle();
         if (particle instanceof XmlSchemaSequence seq) {
             sequence(id, seq, fields, location);
         } else if (particle != null) {
@@ -195,6 +219,20 @@ final class SchemaWalker {
             }
         }
         return TypeModel.complex(id, unique);
+    }
+
+    /** Copies the (already flattened) fields of the base type of an extension. */
+    private void inheritFields(QName baseName, List<FieldModel> fields, String location) {
+        if (baseName == null || (XS.equals(baseName.getNamespaceURI()) && "anyType".equals(baseName.getLocalPart())))
+            return; // extending xs:anyType adds nothing
+        TypeModel base = types.get(named(baseName, location));
+        if (base == null || !base.isComplex()) {
+            // A type that extends itself, or a base that is not a complex type.
+            warn("XSD_DERIVATION", "Base type " + baseName.getLocalPart()
+                    + " could not be flattened; its fields are missing", location);
+            return;
+        }
+        fields.addAll(base.fields());
     }
 
     private void sequence(String ownerId, XmlSchemaSequence seq, List<FieldModel> fields, String location) {

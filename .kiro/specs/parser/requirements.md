@@ -60,19 +60,21 @@ XML convert without data loss.
 
 #### Acceptance Criteria
 
-1. The parser SHALL map `xs:string`, `xs:int`, `xs:long`, `xs:decimal`, `xs:boolean`, `xs:date` and `xs:dateTime` to built-in types.
-2. WHEN another built-in type is used THEN the parser SHALL map it to string and emit `UNSUPPORTED_BUILTIN`.
+1. The parser SHALL map `xs:string`, `xs:normalizedString`, `xs:token`, `xs:int`, `xs:long`, `xs:integer`, `xs:decimal`, `xs:boolean`, `xs:date` and `xs:dateTime` to built-in types. Narrower integer types SHALL map to the next wider built-in so no value the schema allows is refused: `xs:short`, `xs:byte`, `xs:unsignedByte` and `xs:unsignedShort` to `xs:int`; `xs:unsignedInt` to `xs:long`; `xs:nonNegativeInteger`, `xs:positiveInteger`, `xs:negativeInteger`, `xs:nonPositiveInteger` and `xs:unsignedLong` to `xs:integer` (arbitrary precision).
+2. WHEN another built-in type is used (for example `xs:double`, `xs:float`, `xs:base64Binary`, `xs:anyURI`, `xs:time`) THEN the parser SHALL map it to string and emit `UNSUPPORTED_BUILTIN`. `xs:float` and `xs:double` stay strings because JSON has no NaN or INF.
 3. The parser SHALL map `xs:sequence` children to fields in document order, with `minOccurs` and `maxOccurs` (unbounded = -1).
 4. The parser SHALL map a string restriction with `xs:enumeration` facets to an enum type that keeps the values in order.
 5. The parser SHALL resolve named types, anonymous types and `ref=` elements across all inline schemas of the WSDL.
 6. The parser SHALL record each field's namespace from its form (`elementFormDefault` or `form`), using an empty namespace when unqualified.
-7. WHEN `xs:choice`, `xs:all`, `xs:any`, `xs:group`, attributes, `complexContent`, `simpleContent`, `nillable`, list or union types are used THEN the parser SHALL emit a specific warning (`XSD_CHOICE`, `XSD_ALL`, `XSD_ANY`, `XSD_GROUP`, `XSD_ATTRIBUTE`, `XSD_DERIVATION`, `XSD_NILLABLE`, `XSD_LIST_UNION`), drop the unsupported construct, and keep the rest of the type.
+7. WHEN `xs:choice`, `xs:all`, `xs:any`, `xs:group`, attributes, `complexContent` restriction, `simpleContent`, `nillable`, list or union types are used THEN the parser SHALL emit a specific warning (`XSD_CHOICE`, `XSD_ALL`, `XSD_ANY`, `XSD_GROUP`, `XSD_ATTRIBUTE`, `XSD_DERIVATION`, `XSD_NILLABLE`, `XSD_LIST_UNION`), drop the unsupported construct, and keep the rest of the type.
 8. WHEN a referenced type cannot be resolved THEN the parser SHALL map it to string and emit `UNRESOLVED_TYPE`.
 9. WHEN schemas declare more than one target namespace THEN the parser SHALL process them and emit `MULTIPLE_NAMESPACES`.
 10. Type ids SHALL be unique and stable for the same input.
 11. WHEN a complex type has two fields with the same local name THEN the parser SHALL keep the first, drop the rest and emit `XSD_DUPLICATE_FIELD` (field names are JSON property names).
 12. WHEN an element name is not an XML NCName THEN the parser SHALL drop the field and emit `XSD_INVALID_NAME` (names are written into XML by the converter).
 13. WHEN `minOccurs` is larger than `maxOccurs` or larger than 1000 THEN the parser SHALL emit `XSD_OCCURS` and clamp it to the smaller of the two bounds.
+14. WHEN a complex type uses `xs:complexContent` with `xs:extension` THEN the parser SHALL flatten it: the base type's fields (itself flattened, to any depth) come first, then the extension's own fields, which is the element order of an XML instance. Extending `xs:anyType` adds nothing. No warning is emitted for the flattening itself.
+15. WHEN an extension's base cannot be flattened (the type extends itself, directly or through its bases, or the base is not a complex type) THEN the parser SHALL keep the extension's own fields and emit `XSD_DERIVATION` naming the base.
 
 ### Requirement 5: Resource limits
 
