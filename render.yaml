@@ -3,7 +3,7 @@
 # as the mock-bank address in /api/sample-wsdl.
 services:
   - type: web
-    name: soap-necromancer
+    name: wsdlforge
     runtime: docker
     plan: free
     # Pinned: without it the service follows the branch the Blueprint was created from, and a
