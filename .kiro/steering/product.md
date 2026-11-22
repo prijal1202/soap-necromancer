@@ -1,7 +1,7 @@
 # Product: WSDLForge
 
 WSDLForge reforges legacy SOAP services for REST clients and AI agents (formerly SOAP Necromancer;
-the Java packages keep the old `dev.soapnecromancer` name).
+the Java packages are `dev.wsdlforge`).
 Kiroween 2026, category: Resurrection.
 
 ## Terminology (use everywhere: specs, code comments, README, tasks)

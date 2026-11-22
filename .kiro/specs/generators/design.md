@@ -1,6 +1,6 @@
 # Design: Generators
 
-## Module layout (`generators`, package `dev.soapnecromancer.generators`)
+## Module layout (`generators`, package `dev.wsdlforge.generators`)
 
 ```
 Generator            ParseResult -> GeneratedFiles (ordered map path -> bytes); single entry point
@@ -34,14 +34,14 @@ Jackson straight into the records (Jackson supports records natively).
 
 ```
 proxy/pom.xml                                       spring-boot-starter-web, test: rest-assured, jqwik
-proxy/src/main/java/dev/soapnecromancer/runtime/**  copied runtime sources (incl. SoapClient, model)
+proxy/src/main/java/dev/wsdlforge/runtime/**  copied runtime sources (incl. SoapClient, model)
 proxy/src/main/java/<pkg>/ProxyApplication.java
 proxy/src/main/java/<pkg>/ModelConfig.java          loads model.json -> ServiceModel, JsonXmlConverter, SoapClient
 proxy/src/main/java/<pkg>/<Op>Controller.java       one per operation: POST /<Op>
 proxy/src/main/java/<pkg>/ProblemHandler.java       exception -> Problem mapping (Req 2.6)
 proxy/src/main/resources/model.json
 proxy/src/main/resources/application.properties     soap.endpoint=${SOAP_ENDPOINT:<address>}, Jackson BigDecimal flags
-proxy/src/test/java/dev/soapnecromancer/runtime/**  copied ModelArbitraries, XmlRenderer, RoundTripAssertions
+proxy/src/test/java/dev/wsdlforge/runtime/**  copied ModelArbitraries, XmlRenderer, RoundTripAssertions
 proxy/src/test/java/<pkg>/StubSoapServer.java
 proxy/src/test/java/<pkg>/<Op>ContractTest.java     REST Assured, Req 3.1-3.4, 6.3
 proxy/src/test/java/<pkg>/RoundTripProperties.java  jqwik over model.json, Req 3.5

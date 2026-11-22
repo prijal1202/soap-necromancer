@@ -8,7 +8,7 @@ converter consume. Unsupported features never fail silently: they become warning
 
 ## Glossary
 
-- **Canonical model**: `ServiceModel` and its operations and types (`dev.soapnecromancer.runtime.model`).
+- **Canonical model**: `ServiceModel` and its operations and types (`dev.wsdlforge.runtime.model`).
 - **Warning**: `{code, message, location}` reported to the UI via `generator-report.json`.
 - **Fatal error**: the input cannot produce any operation; the generator returns an error, no zip.
 

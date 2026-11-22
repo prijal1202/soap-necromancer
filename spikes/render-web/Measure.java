@@ -43,7 +43,7 @@ public class Measure {
         String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
         ProcessBuilder pb = new ProcessBuilder(java,
                 "-XX:MaxRAM=512m", "-XX:MaxRAMPercentage=70", "-XX:+UseSerialGC", "-Xss512k",
-                "-XX:ActiveProcessorCount=1", "-jar", "web/target/soap-necromancer.jar")
+                "-XX:ActiveProcessorCount=1", "-jar", "web/target/wsdl-forge.jar")
                 .redirectErrorStream(true).redirectOutput(new File("measure-app.log"));
         pb.environment().put("PORT", String.valueOf(PORT));
         long t0 = System.nanoTime();

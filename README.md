@@ -10,17 +10,18 @@ Upload a WSDL 1.1 `document/literal` file. The generator parses it and returns a
 - a generated MCP server (one tool per SOAP operation),
 - REST Assured contract tests and jqwik JSON<->XML round-trip tests.
 
-> Live: https://soap-necromancer.onrender.com (Render free tier; the first request after a long idle
+> Live: https://wsdlforge.onrender.com (Render free tier; the first request after a long idle
 > can take up to a minute). See `.kiro/steering/` for scope and architecture.
 >
-> Formerly **SOAP Necromancer**. The URL, the repository, the jar name and the Java packages
-> (`dev.soapnecromancer`) keep the old name so existing links and builds keep working.
+> Formerly **SOAP Necromancer**. The repository moved to `prijal1202/wsdl-forge` (GitHub redirects
+> the old address). The Java packages are now `dev.wsdlforge` and the jar is
+> `wsdl-forge.jar`.
 
 ## Run the generator
 
 ```
 mvn -pl web -am package -DskipTests
-java -jar web/target/soap-necromancer.jar
+java -jar web/target/wsdl-forge.jar
 ```
 
 Open http://localhost:8080. It listens on `PORT` (default 8080) and also serves the bundled legacy

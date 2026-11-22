@@ -1,6 +1,6 @@
 # Design: Model-driven JSON <-> XML Converter
 
-## API (`dev.soapnecromancer.runtime`)
+## API (`dev.wsdlforge.runtime`)
 
 ```java
 JsonXmlConverter(ServiceModel model)

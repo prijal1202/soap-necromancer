@@ -4,8 +4,8 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>dev.soapnecromancer</groupId>
-    <artifactId>soap-necromancer</artifactId>
+    <groupId>dev.wsdlforge</groupId>
+    <artifactId>wsdl-forge</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
   <artifactId>web</artifactId>
@@ -13,13 +13,13 @@
 
   <dependencies>
     <dependency>
-      <groupId>dev.soapnecromancer</groupId>
+      <groupId>dev.wsdlforge</groupId>
       <artifactId>generators</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
       <!-- The legacy SOAP backend for the live demo, served at /mock-bank/ws by this same JVM. -->
-      <groupId>dev.soapnecromancer</groupId>
+      <groupId>dev.wsdlforge</groupId>
       <artifactId>mock-bank</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -35,7 +35,7 @@
     </dependency>
     <dependency>
       <!-- SsrfCanary: the same SSRF payload the parser tests use, now sent through the public upload. -->
-      <groupId>dev.soapnecromancer</groupId>
+      <groupId>dev.wsdlforge</groupId>
       <artifactId>core</artifactId>
       <version>${project.version}</version>
       <type>test-jar</type>
@@ -44,7 +44,7 @@
   </dependencies>
 
   <build>
-    <finalName>soap-necromancer</finalName>
+    <finalName>wsdl-forge</finalName>
     <plugins>
       <plugin>
         <!-- Builds the React UI in ../frontend into ../frontend/dist (Vite). Skip with
@@ -98,7 +98,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
-          <mainClass>dev.soapnecromancer.web.NecromancerApplication</mainClass>
+          <mainClass>dev.wsdlforge.web.NecromancerApplication</mainClass>
         </configuration>
         <executions>
           <execution>

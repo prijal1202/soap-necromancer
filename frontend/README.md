@@ -14,7 +14,7 @@ Run the generator on port 8080, then start Vite's dev server, which proxies `/ap
 to it:
 
 ```
-java -jar web/target/soap-necromancer.jar
+java -jar web/target/wsdl-forge.jar
 cd frontend
 npm ci
 npm run dev

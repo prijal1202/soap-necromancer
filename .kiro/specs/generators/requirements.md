@@ -13,7 +13,7 @@ no state (see `.kiro/steering/tech.md`).
 
 - **Generated project**: the `proxy/` or `mcp-server/` directory in the zip, each a standalone Maven project.
 - **Runtime sources**: the `.java` files of the `runtime` module, including the canonical model
-  records in `dev.soapnecromancer.runtime.model`. Copied verbatim into the generated proxy.
+  records in `dev.wsdlforge.runtime.model`. Copied verbatim into the generated proxy.
 - **Problem**: an RFC 7807 `application/problem+json` error body.
 
 ## Requirements

@@ -32,7 +32,7 @@ public class ContainerMeasure {
     static Path log;
 
     public static void main(String[] args) throws Exception {
-        String image = args.length > 0 ? args[0] : "soap-necromancer";
+        String image = args.length > 0 ? args[0] : "wsdl-forge";
         String cpus = args.length > 1 ? args[1] : "0.1";
         String label = args.length > 2 ? args[2] : image + "-" + cpus;
         // Optional 4th arg replaces the image's JAVA_TOOL_OPTIONS (keep the GC the same, or a CDS archive is rejected).

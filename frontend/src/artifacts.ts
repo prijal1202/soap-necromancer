@@ -77,7 +77,7 @@ const GROUPS: { id: string; label: string; summary: string; matches: (path: stri
 ]
 
 /** The converter runtime copied into every generated proxy: shared code, so list it after the service's own. */
-const COPIED_RUNTIME = '/dev/soapnecromancer/runtime/'
+const COPIED_RUNTIME = '/dev/wsdlforge/runtime/'
 
 export function groupArtifacts(files: Artifact[]): ArtifactGroup[] {
   const buckets = new Map<string, Artifact[]>(GROUPS.map((g) => [g.id, []]))

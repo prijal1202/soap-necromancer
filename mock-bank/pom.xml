@@ -4,15 +4,15 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>dev.soapnecromancer</groupId>
-    <artifactId>soap-necromancer</artifactId>
+    <groupId>dev.wsdlforge</groupId>
+    <artifactId>wsdl-forge</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
   <artifactId>mock-bank</artifactId>
   <name>mock-bank (legacy SOAP 1.1 and 1.2 demo backend, mounted in-process by web)</name>
 
   <!--
-    Library module: web picks up dev.soapnecromancer.mockbank by component scan and serves it at
+    Library module: web picks up dev.wsdlforge.mockbank by component scan and serves it at
     /mock-bank/ws in the same JVM. For local dev run it alone with:
       mvn -pl mock-bank spring-boot:test-run
   -->
@@ -35,7 +35,7 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
-          <mainClass>dev.soapnecromancer.mockbank.MockBankDevApplication</mainClass>
+          <mainClass>dev.wsdlforge.mockbank.MockBankDevApplication</mainClass>
         </configuration>
       </plugin>
     </plugins>

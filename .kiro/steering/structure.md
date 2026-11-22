@@ -1,6 +1,6 @@
 # Structure
 
-Maven multi-module build. Root package: `dev.soapnecromancer`.
+Maven multi-module build. Root package: `dev.wsdlforge`.
 
 ```
 pom.xml            parent POM (Spring Boot BOM import, pinned versions)
@@ -20,7 +20,7 @@ spikes/            throwaway spike code
 ## Module dependencies
 
 - `runtime` -> none (JDK only). Owns the canonical model records
-  (`dev.soapnecromancer.runtime.model`) so the generated proxy and the generator share them.
+  (`dev.wsdlforge.runtime.model`) so the generated proxy and the generator share them.
 - `core` -> `runtime` (produces the canonical model).
 - `generators` -> `core`, `runtime` (runtime sources are copied into the generated proxy).
 - `mock-bank` -> none of the generator modules. Its `bank.wsdl` is the shared test fixture.

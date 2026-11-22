@@ -1,5 +1,5 @@
 {
-  "name": "soap-necromancer-ui",
+  "name": "wsdl-forge-ui",
   "private": true,
   "version": "0.1.0",
   "description": "One-page UI for the WSDLForge generator. Built by Maven (web module) into the jar.",

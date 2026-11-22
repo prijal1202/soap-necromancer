@@ -2,10 +2,10 @@
 
 ## Placement
 
-- Model records: `runtime` (`dev.soapnecromancer.runtime.model`). The `runtime` module is JDK-only
+- Model records: `runtime` (`dev.wsdlforge.runtime.model`). The `runtime` module is JDK-only
   and its sources are copied into every generated proxy, so the generated proxy and the generator
   share one definition of the model.
-- Parser: `core` (`dev.soapnecromancer.core`). Depends on `runtime`, WSDL4J 1.6.3, XmlSchema 2.3.3,
+- Parser: `core` (`dev.wsdlforge.core`). Depends on `runtime`, WSDL4J 1.6.3, XmlSchema 2.3.3,
   Jackson (for `model.json` only).
 
 ## Canonical model

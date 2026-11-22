@@ -15,7 +15,7 @@ import { ForgeAnimation } from './components/ForgeAnimation.tsx'
 import { UploadPanel } from './components/UploadPanel.tsx'
 import { WarningsPanel } from './components/WarningsPanel.tsx'
 
-const REPO = 'https://github.com/prijal1202/soap-necromancer'
+const REPO = 'https://github.com/prijal1202/wsdl-forge'
 /** A 503 means every generation slot stayed busy for 5 s. Retry a couple of times, then report it. */
 const MAX_BUSY_RETRIES = 2
 const MAX_RETRY_WAIT_SECONDS = 15
