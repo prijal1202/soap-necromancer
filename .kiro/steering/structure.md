@@ -32,6 +32,7 @@ spikes/            throwaway spike code
 model.json
 openapi.yaml
 generator-report.json
+preview.json  data for the UI's preview tabs (OpenAPI as JSON, mcp.json entry, JSON -> SOAP samples)
 proxy/        generated proxy (runtime sources copied in) + REST Assured and jqwik tests
 mcp-server/   generated MCP server
 README.md

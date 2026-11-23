@@ -2,7 +2,7 @@
 
 The generator's one-page UI: React 19, Vite, TypeScript. It calls the generator API on the same
 origin (`POST /api/generate`, `GET /api/sample-wsdl`), unpacks the returned zip in the browser,
-and shows the warnings and every generated file in tabs.
+and previews it in tabs: conversion report, OpenAPI, MCP tools, a JSON ↔ SOAP sample, and every file.
 
 You normally don't build this by hand. `mvn package` in the `web` module downloads the pinned Node
 (`node.version` in the root `pom.xml`) into `frontend/node/`, runs `npm ci` and `npm run build`, and
@@ -26,7 +26,8 @@ npm run dev
 | ------------------ | --------------------------------------------------------------------------------- |
 | `src/api.ts`       | API calls, RFC 7807 problem parsing, `Retry-After`                                |
 | `src/artifacts.ts` | Unzips the result (fflate), groups files into tabs, reads `generator-report.json` |
+| `src/preview.ts`   | Reads `preview.json`, `tools.json` and `model.json` for the preview tabs          |
 | `src/App.tsx`      | Page layout and the idle / working / done / failed states; retries a 503 twice    |
-| `src/components/`  | Upload panel, warnings panel, artifact tabs with a plain-text viewer              |
+| `src/components/`  | Upload panel, preview tabs (report, OpenAPI, MCP tools, JSON ↔ SOAP), file viewer |
 
 Add dependencies with `npm install <pkg>`. `.npmrc` pins the exact version (no open ranges).

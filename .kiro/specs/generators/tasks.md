@@ -53,3 +53,15 @@ Plan Task 9
   - _Requirements: 4.4, 4.5, 6.2, 7.2_
 - [x] 13. Extend the Kiro hook to `generators` fast tests (done early, before Task 6 code)
   - _Requirements: 7.1, 7.3_
+
+In-browser preview
+
+- [x] 14. `SoapClient.envelope` / `requestHeaders` (static, used by `call`), `OpenApiGenerator.document`,
+      `SampleRequests`, `PreviewGenerator` -> `preview.json`. Tests: OpenAPI JSON equals the YAML, the
+      Transfer envelope keeps `1234567890.123456789`, envelope and headers equal what a real `SoapClient`
+      sends to a stub (SOAP 1.1 and 1.2), required fan-out omitted in < 2 s, tight output budget still
+      generates, and the preview's envelope posted to the in-process mock bank is parsed (web test)
+  - _Requirements: 8.1-8.5_
+- [x] 15. UI: Conversion Report, OpenAPI 3.0 Spec, MCP Server Tools, JSON ↔ SOAP Sample tabs plus the
+      existing file browser as "All files"; all text rendered as text
+  - _Requirements: 8.1, 8.6_

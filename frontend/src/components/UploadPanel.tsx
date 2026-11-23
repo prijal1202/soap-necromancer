@@ -56,7 +56,7 @@ export function UploadPanel({ busy, onFile, onSample }: Props) {
       </div>
       <div className="sample">
         <button type="button" className="primary forge-button" disabled={busy} onClick={() => onSample('1.1')}>
-          <span aria-hidden="true">🔥</span> Forge the sample bank
+          <span aria-hidden="true">🔥</span> Try Demo Bank Service
         </button>
         <button type="button" className="secondary" disabled={busy} onClick={() => onSample('1.2')}>
           Forge it over SOAP 1.2

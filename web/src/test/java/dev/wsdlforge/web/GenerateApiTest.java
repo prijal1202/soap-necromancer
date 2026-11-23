@@ -107,7 +107,30 @@ class GenerateApiTest {
         assertThat(files.keySet()).contains("model.json", "openapi.yaml", "generator-report.json", "README.md",
                 "proxy/pom.xml", "proxy/src/main/resources/application.properties",
                 "proxy/src/test/java/generated/legacybankservice/TransferContractTest.java",
-                "mcp-server/pom.xml", "mcp-server/src/main/resources/tools.json");
+                "mcp-server/pom.xml", "mcp-server/src/main/resources/tools.json", "preview.json");
+    }
+
+    /**
+     * Generators Requirement 8.4 through the public endpoint: the preview's
+     * Transfer
+     * envelope, posted as-is with its headers, is a real request. The bank parses
+     * it, reads the amount and only then refuses the sample account.
+     */
+    @Test
+    void previewEnvelopeIsAcceptedByTheMockBank() throws Exception {
+        JsonNode preview = json.readTree(unzip(postMultipart("wsdl", sampleWsdl()).body()).get("preview.json"));
+        JsonNode transfer = null;
+        for (JsonNode s : preview.get("samples")) {
+            if (s.get("operation").asText().equals("Transfer"))
+                transfer = s;
+        }
+        assertThat(transfer).isNotNull();
+        HttpRequest.Builder post = HttpRequest.newBuilder(URI.create(url("/mock-bank/ws")))
+                .POST(HttpRequest.BodyPublishers.ofString(transfer.get("envelope").asText(), StandardCharsets.UTF_8));
+        transfer.get("soapHeaders").fields().forEachRemaining(h -> post.header(h.getKey(), h.getValue().asText()));
+        HttpResponse<String> r = HTTP.send(post.build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(r.body()).contains("Unknown account: example-1").doesNotContain("Malformed")
+                .doesNotContain("not a valid xs:decimal");
     }
 
     @Test

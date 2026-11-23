@@ -28,8 +28,10 @@ class GeneratorTest {
         GeneratedFiles files = new Generator().generate(BANK);
         assertThat(files.files().keySet()).contains("model.json", "openapi.yaml", "generator-report.json", "README.md",
                 "proxy/pom.xml", "proxy/src/main/resources/model.json");
+        assertThat(files.files().keySet()).contains("preview.json");
         assertThat(files.files().keySet()).allMatch(p -> p.equals("model.json") || p.equals("openapi.yaml")
-                || p.equals("generator-report.json") || p.equals("README.md") || p.startsWith("proxy/")
+                || p.equals("generator-report.json") || p.equals("README.md") || p.equals("preview.json")
+                || p.startsWith("proxy/")
                 || p.startsWith("mcp-server/"));
         assertThat(files.files().keySet()).contains("mcp-server/pom.xml", "mcp-server/src/main/resources/tools.json");
     }

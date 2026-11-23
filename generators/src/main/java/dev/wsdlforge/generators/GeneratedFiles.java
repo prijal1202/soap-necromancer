@@ -45,6 +45,11 @@ public final class GeneratedFiles {
         return totalBytes;
     }
 
+    /** Bytes still allowed before {@code LIMIT_OUTPUT}. */
+    public long remainingBytes() {
+        return maxTotalBytes - totalBytes;
+    }
+
     /** Text files are stored UTF-8 with LF line endings. */
     public void add(String path, String text) {
         add(path, text.replace("\r\n", "\n").getBytes(StandardCharsets.UTF_8));

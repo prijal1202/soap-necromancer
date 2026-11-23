@@ -20,8 +20,10 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -95,20 +97,11 @@ public final class SoapClient {
      * as canonical JSON.
      */
     public Object call(OperationModel op, Object json) {
-        String payload = converter.toXml(op.input(), json);
-        String envelope = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soap:Envelope xmlns:soap=\""
-                + version.envelopeNamespace() + "\"><soap:Body>" + payload + "</soap:Body></soap:Envelope>";
+        String envelope = envelope(version, converter.toXml(op.input(), json));
         HttpRequest.Builder request = HttpRequest.newBuilder(endpoint)
                 .timeout(readTimeout)
                 .POST(HttpRequest.BodyPublishers.ofString(envelope, StandardCharsets.UTF_8));
-        switch (version) {
-            case SOAP_11 -> request.header("Content-Type", "text/xml; charset=utf-8")
-                    .header("SOAPAction", quotedHeaderValue(op.soapAction()));
-            // SOAP 1.2 HTTP binding: the action travels as a media-type parameter, not a
-            // header.
-            case SOAP_12 -> request.header("Content-Type", "application/soap+xml; charset=utf-8"
-                    + (op.soapAction().isEmpty() ? "" : "; action=" + quotedHeaderValue(op.soapAction())));
-        }
+        requestHeaders(version, op).forEach(request::header);
 
         HttpResponse<byte[]> response = send(request.build());
         int status = response.statusCode();
@@ -136,6 +129,34 @@ public final class SoapClient {
             throw new SoapTransportException(SoapTransportException.Kind.BAD_RESPONSE,
                     "SOAP response does not match the WSDL at " + e.path());
         }
+    }
+
+    /**
+     * The exact request body {@link #call} posts: {@code payload} (the converter's
+     * output) in an envelope of {@code version}. Static, so the generator's
+     * in-browser preview shows these bytes without building an HTTP client.
+     */
+    public static String envelope(SoapVersion version, String payload) {
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?><soap:Envelope xmlns:soap=\""
+                + version.envelopeNamespace() + "\"><soap:Body>" + payload + "</soap:Body></soap:Envelope>";
+    }
+
+    /**
+     * The headers {@link #call} sends for {@code op}, in order. SOAP 1.1:
+     * Content-Type and SOAPAction. SOAP 1.2 HTTP binding: the action travels as a
+     * media-type parameter, not a header (and is left out when empty).
+     */
+    public static Map<String, String> requestHeaders(SoapVersion version, OperationModel op) {
+        Map<String, String> headers = new LinkedHashMap<>();
+        switch (version) {
+            case SOAP_11 -> {
+                headers.put("Content-Type", "text/xml; charset=utf-8");
+                headers.put("SOAPAction", quotedHeaderValue(op.soapAction()));
+            }
+            case SOAP_12 -> headers.put("Content-Type", "application/soap+xml; charset=utf-8"
+                    + (op.soapAction().isEmpty() ? "" : "; action=" + quotedHeaderValue(op.soapAction())));
+        }
+        return headers;
     }
 
     /**

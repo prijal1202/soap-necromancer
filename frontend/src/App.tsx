@@ -10,8 +10,9 @@ import {
   type Health,
   type Report,
 } from './artifacts.ts'
-import { ArtifactTabs } from './components/ArtifactTabs.tsx'
+import { readModel, readPreview, readTools, type ModelSummary, type Preview, type Tool } from './preview.ts'
 import { ForgeAnimation } from './components/ForgeAnimation.tsx'
+import { PreviewTabs } from './components/PreviewTabs.tsx'
 import { UploadPanel } from './components/UploadPanel.tsx'
 import { WarningsPanel } from './components/WarningsPanel.tsx'
 
@@ -29,6 +30,10 @@ interface Result {
   groups: ArtifactGroup[]
   report: Report | null
   health: Health | null
+  preview: Preview | null
+  model: ModelSummary | null
+  tools: Tool[]
+  yaml: string | null
 }
 
 type State =
@@ -73,6 +78,10 @@ export default function App() {
               groups: groupArtifacts(files),
               report: readReport(files),
               health: readHealth(files),
+              preview: readPreview(files),
+              model: readModel(files),
+              tools: readTools(files),
+              yaml: files.find((f) => f.path === 'openapi.yaml')?.text ?? null,
             },
           })
           return
@@ -190,8 +199,15 @@ function ResultView({ result }: { result: Result }) {
         </a>
       </div>
       {health && health.hollow > 0 && <HollowWarning health={health} />}
-      <WarningsPanel warnings={report?.warnings ?? []} mode="report" />
-      <ArtifactTabs key={result.id} groups={result.groups} />
+      <PreviewTabs
+        key={result.id}
+        preview={result.preview}
+        model={result.model}
+        tools={result.tools}
+        warnings={report?.warnings ?? []}
+        yaml={result.yaml}
+        groups={result.groups}
+      />
     </div>
   )
 }
@@ -210,7 +226,7 @@ function HollowWarning({ health }: { health: Health }) {
       </h3>
       <p>
         Their requests and responses came out empty, so the generated API{all ? '' : ' for those operations'} sends
-        and returns <code>{'{}'}</code>. The warnings below say why. Usually it is a schema feature outside the
+        and returns <code>{'{}'}</code>. The Conversion Report below says why. Usually it is a schema feature outside the
         supported subset, or types defined in a separate XSD file that the forge does not fetch.
       </p>
     </div>

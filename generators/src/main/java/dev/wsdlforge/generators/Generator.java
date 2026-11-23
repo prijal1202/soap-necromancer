@@ -48,6 +48,8 @@ public final class Generator {
         new TestGenerator().generate(model, out);
         new McpServerGenerator().generate(model, out);
         out.add("README.md", readme(model, result.warnings()));
+        // Last, so it can see how much of the output budget is left (Requirement 8.5).
+        new PreviewGenerator().generate(model, out);
         return out;
     }
 

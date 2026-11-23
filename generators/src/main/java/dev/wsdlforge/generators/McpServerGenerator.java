@@ -37,7 +37,7 @@ public final class McpServerGenerator {
         ctx.put("serviceNamePom", Escapes.pomText(model.name()));
         ctx.put("serviceNameDoc", Escapes.javaComment(model.name()));
         ctx.put("serverNameJava", Escapes.javaString(model.name()));
-        ctx.put("mcpKey", Names.artifactId(model.name(), "soap"));
+        ctx.put("mcpKey", mcpKey(model));
         List<Map<String, String>> readmeTools = new ArrayList<>();
         for (Map<String, Object> t : tools) {
             readmeTools.add(Map.of("name", (String) t.get("name"), "description",
@@ -56,6 +56,18 @@ public final class McpServerGenerator {
 
     public static String artifactId(ServiceModel model) {
         return Names.artifactId(model.name(), "mcp-server");
+    }
+
+    /** The server's key under {@code mcpServers} in Kiro's {@code mcp.json}. */
+    public static String mcpKey(ServiceModel model) {
+        return Names.artifactId(model.name(), "soap");
+    }
+
+    /**
+     * The shaded jar {@code mvn package} builds, as named in the README snippet.
+     */
+    public static String jarName(ServiceModel model) {
+        return artifactId(model) + "-1.0.0.jar";
     }
 
     /**

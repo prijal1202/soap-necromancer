@@ -86,7 +86,7 @@ an agent like Kiro can call the legacy service.
 
 ### Requirement 5: Packaging
 
-1. The generator SHALL return files in this layout: `model.json`, `openapi.yaml`, `generator-report.json`, `README.md`, `proxy/**`, `mcp-server/**`.
+1. The generator SHALL return files in this layout: `model.json`, `openapi.yaml`, `generator-report.json`, `README.md`, `preview.json` (Requirement 8), `proxy/**`, `mcp-server/**`.
 2. `generator-report.json` SHALL list every parser warning (`code`, `message`, `location`) and the generator version.
 3. The zip SHALL be deterministic: entries sorted, fixed timestamps, so the same WSDL always gives identical bytes.
 4. Java package and artifact names SHALL be derived from the service name, sanitized to valid identifiers.
@@ -111,3 +111,18 @@ with every digit, so that money is never rounded by a JSON layer.
 1. Generator unit tests (golden files, schema validation, rendered file list) SHALL be tagged `fast` and run by the Kiro hook when templates change.
 2. An integration test (`*IT`, maven-failsafe, `verify` phase only) SHALL generate from `bank.wsdl`, run `mvn package` on both generated projects, start mock-bank, the generated proxy and the generated MCP server, and call GetBalance and Transfer end to end, including via MCP `tools/call`.
 3. The Kiro hook SHALL NOT run the integration test. It runs the `test` phase only, so failsafe tests are excluded by construction.
+
+### Requirement 8: In-browser preview
+
+**User Story:** As a judge or first-time user, I want to inspect what was generated from a WSDL (what
+was converted and skipped, the REST API, the MCP tools, and the SOAP the proxy sends) in the
+browser, without downloading and unzipping the zip.
+
+#### Acceptance Criteria
+
+1. The generator SHALL emit `preview.json` in the zip with: the service name and SOAP version, the OpenAPI document, the Kiro `mcp.json` entry for the generated MCP server (the same as in `mcp-server/README.md`), and one sample per operation. The UI SHALL read it from the zip it already received; there SHALL be no second request and no server-side state.
+2. The OpenAPI document in `preview.json` SHALL be the same document as `openapi.yaml`, built once by `OpenApiGenerator`.
+3. Each sample SHALL hold a request JSON with every required field (optional fields near the root while a budget lasts), as text, with every decimal set to `1234567890.123456789`, and the JSON paths of those decimals.
+4. Each sample SHALL hold the exact SOAP envelope and HTTP headers the generated proxy sends for that request, produced by the runtime's `JsonXmlConverter` and `SoapClient` (not a re-implementation), for SOAP 1.1 and 1.2.
+5. The preview SHALL be bounded and SHALL NOT make a generation fail: a sample needing more than 2,000 values is omitted with its reason, samples stop after 2 MB in total, and when the full preview would exceed the output limit (Requirement 5.6) a short note replaces it, or it is left out. Parsing and every parser and generator limit run before the preview is built; nothing is fetched.
+6. The UI SHALL render all WSDL-derived text as text, never as HTML.

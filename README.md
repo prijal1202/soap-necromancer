@@ -30,10 +30,23 @@ bank SOAP service at `/mock-bank/ws` (SOAP 1.1) and `/mock-bank/ws12` (SOAP 1.2)
 
 ## Use the UI
 
-One page: drop a WSDL file onto the anvil (or click **Forge the sample bank**, or **Forge it over
-SOAP 1.2**), then read the warnings, browse every generated file in tabs (README, OpenAPI, generated proxy, tests, generated MCP server,
-model and report), and download the zip. The browser unpacks the zip itself, so the server still
-holds nothing. A 422 shows the same warnings table with the reason the WSDL was rejected. Source and
+One page: drop a WSDL file onto the anvil (or click **Try Demo Bank Service**, or **Forge it over
+SOAP 1.2**). Next to the download button, the preview has these tabs:
+
+- **Conversion Report**: every converted operation with its REST endpoint, SOAP action and request and
+  response elements, and everything skipped or simplified, with its exact location in the WSDL and the reason.
+- **OpenAPI 3.0 Spec**: each endpoint with its request and response schemas as field trees, or the raw YAML
+  or JSON.
+- **MCP Server Tools**: each tool's name, description and JSON input schema, and a copyable `mcp.json` entry
+  for Kiro.
+- **JSON ↔ SOAP Sample**: a sample REST request next to the exact SOAP 1.1 or 1.2 envelope and headers the
+  generated proxy sends for it. Every decimal is `1234567890.123456789`, highlighted in both, so you can see
+  it arrive digit for digit.
+- **All files**: every generated file, in plain text.
+
+The browser unpacks the zip itself, so the server still holds nothing. The preview reads `preview.json`,
+which the generator adds to the zip; its envelopes come from the same converter and SOAP client code the
+generated proxy runs. A 422 shows the same warnings table with the reason the WSDL was rejected. Source and
 dev setup: `frontend/README.md`.
 
 ```
