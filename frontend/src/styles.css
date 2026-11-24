@@ -1104,6 +1104,123 @@ ul.tools {
   min-width: 0;
 }
 
+/* ---- opening intro: furnace, blade hammered, cooled and ground, then the page (IntroForge.tsx) ---- */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  cursor: pointer;
+  background: #030202;
+}
+
+.intro.leaving {
+  animation: intro-out 0.5s ease-in forwards;
+  pointer-events: none;
+}
+
+@keyframes intro-out {
+  to {
+    opacity: 0;
+    filter: brightness(1.8) blur(2px);
+  }
+}
+
+.intro-stage {
+  position: absolute;
+  inset: -12px; /* room for the shake */
+}
+
+.intro-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.intro-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 90% at 50% 55%,
+    transparent 45%,
+    rgba(0, 0, 0, 0.82) 100%
+  );
+}
+
+.intro-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 13%;
+  text-align: center;
+  /* The delay is set inline from IntroForge.tsx, so it follows the timeline's speed. */
+  animation: intro-title 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes intro-title {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(8px);
+  }
+}
+
+.intro-name {
+  margin: 0;
+  font-size: clamp(2.6rem, 7.5vw, 4.6rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.intro-steel {
+  background: linear-gradient(
+    180deg,
+    #f7f9fb 0%,
+    #c3cbd3 45%,
+    #6c7580 52%,
+    #aeb7c1 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.intro-molten {
+  background: linear-gradient(180deg, #fff6d0 0%, #ffb13d 45%, #e2470f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 14px rgba(255, 110, 30, 0.55));
+}
+
+.intro-tagline {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: rgba(255, 210, 170, 0.75);
+}
+
+.intro-skip {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.intro-skip:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
 /* ---- footer ---- */
 footer {
   margin-top: 28px;
@@ -1129,7 +1246,8 @@ footer p {
 
 /* Motion is decoration: switch it all off for people who ask for that. */
 @media (prefers-reduced-motion: reduce) {
-  .embers {
+  .embers,
+  .intro {
     display: none;
   }
 

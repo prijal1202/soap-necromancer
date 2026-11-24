@@ -29,5 +29,7 @@ npm run dev
 | `src/preview.ts`   | Reads `preview.json`, `tools.json` and `model.json` for the preview tabs          |
 | `src/App.tsx`      | Page layout and the idle / working / done / failed states; retries a 503 twice    |
 | `src/components/`  | Upload panel, preview tabs (report, OpenAPI, MCP tools, JSON ↔ SOAP), file viewer |
+| `src/intro/`       | Opening forge scene: WebGL fire shader and a 2D canvas anvil, blade and hammer;   |
+|                    | `SPEED` sets its pace. Shown by `components/IntroForge.tsx`                       |
 
 Add dependencies with `npm install <pkg>`. `.npmrc` pins the exact version (no open ranges).

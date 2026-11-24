@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { generate, NetworkError, SAMPLES, sampleWsdl, type Problem } from './api.ts'
+import { IntroForge } from './components/IntroForge.tsx'
 import {
   formatBytes,
   groupArtifacts,
@@ -44,6 +45,8 @@ type State =
 
 export default function App() {
   const [state, setState] = useState<State>({ phase: 'idle' })
+  // The opening flame-and-blade intro; never shown to people who ask for less motion.
+  const [intro, setIntro] = useState(() => !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const runId = useRef(0)
   const zipUrl = useRef<string | null>(null)
 
@@ -113,6 +116,7 @@ export default function App() {
 
   return (
     <>
+      {intro && <IntroForge onDone={() => setIntro(false)} />}
       <div className="embers" aria-hidden="true">
         {Array.from({ length: 14 }, (_, i) => (
           <span key={i} style={{ ['--i' as string]: i }} />

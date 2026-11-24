@@ -30,6 +30,9 @@ bank SOAP service at `/mock-bank/ws` (SOAP 1.1) and `/mock-bank/ws12` (SOAP 1.2)
 
 ## Use the UI
 
+The page opens with a short forge intro (about 4 s: a blade is hammered on an anvil and cools).
+A click or any key skips it, and it never plays when the system asks for reduced motion.
+
 One page: drop a WSDL file onto the anvil (or click **Try Demo Bank Service**, or **Forge it over
 SOAP 1.2**). Next to the download button, the preview has these tabs:
 
