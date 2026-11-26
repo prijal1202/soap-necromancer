@@ -12,3 +12,7 @@ frontend/dist/
 spikes/**/target/
 .jqwik-database
 build.log
+# Submission drafts and notes: kept locally, not published.
+docs/devpost-draft.md
+docs/devto-post.md
+docs/writeup-notes.md
