@@ -10,3 +10,6 @@ frontend/node/
 frontend/dist/
 *.log
 *.txt
+# Local secrets (git ignores them too); never copy them into an image.
+.env
+.env.*
